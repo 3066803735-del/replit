@@ -1,6 +1,5 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
   description: API specification
@@ -10,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: analyze
+    description: Hyperliquid wallet analysis
 paths:
   /healthz:
     get:
@@ -24,6 +25,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /analyze:
+    post:
+      operationId: analyzeWallets
+      tags: [analyze]
+      summary: Analyze wallets
+      description: Fetch and analyze Hyperliquid wallet fills
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeRequest"
+      responses:
+        "200":
+          description: Analysis results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +68,224 @@ components:
       required:
         - status
 
+    AnalyzeRequest:
+      type: object
+      properties:
+        wallets:
+          type: array
+          items:
+            type: string
+          description: List of wallet addresses to analyze
+        timeWindows:
+          type: array
+          items:
+            type: integer
+          description: Time windows in days (e.g. [3, 7, 30])
+        mergeMinutes:
+          type: number
+          description: Merge window in minutes for dedup fills
+        myFeeRate:
+          type: number
+          description: Your taker fee rate in percent (e.g. 0.035)
+      required:
+        - wallets
+
+    AnalyzeResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletResult"
+      required:
+        - results
+
+    WalletResult:
+      type: object
+      properties:
+        wallet:
+          type: string
+        error:
+          type: string
+        rawFillCount:
+          type: integer
+        cleanFillCount:
+          type: integer
+        waterRatio:
+          type: number
+        globalStats:
+          $ref: "#/components/schemas/GlobalStats"
+        windowStats:
+          type: array
+          items:
+            $ref: "#/components/schemas/WindowStats"
+      required:
+        - wallet
+
+    GlobalStats:
+      type: object
+      properties:
+        totalVolume:
+          type: number
+        totalFees:
+          type: number
+        totalPnl:
+          type: number
+        netPnl:
+          type: number
+        feeRate:
+          type: number
+        topCoins:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoinVolume"
+      required:
+        - totalVolume
+        - totalFees
+        - totalPnl
+        - netPnl
+        - feeRate
+        - topCoins
+
+    CoinVolume:
+      type: object
+      properties:
+        coin:
+          type: string
+        volume:
+          type: number
+        fees:
+          type: number
+        pct:
+          type: number
+      required:
+        - coin
+        - volume
+        - fees
+        - pct
+
+    WindowStats:
+      type: object
+      properties:
+        days:
+          type: integer
+        trades:
+          type: integer
+        winRate:
+          type: number
+        netPnl:
+          type: number
+        profitFactor:
+          type: number
+        avgRoi:
+          type: number
+        freq:
+          type: number
+        longWr:
+          type: number
+        shortWr:
+          type: number
+        avgWin:
+          type: number
+        avgLoss:
+          type: number
+        pnlRatio:
+          type: number
+        maxWin:
+          type: number
+        maxLoss:
+          type: number
+        maxLossStreak:
+          type: integer
+        maxWinStreak:
+          type: integer
+        fees:
+          type: number
+        avgHoldTotalH:
+          type: number
+        avgHoldWinH:
+          type: number
+        avgHoldLossH:
+          type: number
+        totalVolume:
+          type: number
+        avgNotional:
+          type: number
+        feeDrag:
+          type: number
+        posCv:
+          type: number
+        martingaleSignals:
+          type: integer
+        nightRatio:
+          type: number
+        largeLossEvents:
+          type: integer
+        recoveryFactor:
+          type: number
+        expectValue:
+          type: number
+        concentrationRatio:
+          type: number
+        top3Coins:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoinStat"
+        reverseNetPnl:
+          type: number
+        reverseWinRate:
+          type: number
+        reverseAvgWin:
+          type: number
+        reverseAvgLoss:
+          type: number
+        reversePnlRatio:
+          type: number
+        myFees:
+          type: number
+        rawEdge:
+          type: number
+        breakevenFeeRate:
+          type: number
+        leekScore:
+          type: integer
+        diagnoses:
+          type: array
+          items:
+            type: string
+        conclusion:
+          type: string
+      required:
+        - days
+        - trades
+
+    CoinStat:
+      type: object
+      properties:
+        coin:
+          type: string
+        trades:
+          type: integer
+        wins:
+          type: integer
+        volume:
+          type: number
+        pnl:
+          type: number
+        winRate:
+          type: number
+      required:
+        - coin
+        - trades
+        - wins
+        - volume
+        - pnl
+        - winRate
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error

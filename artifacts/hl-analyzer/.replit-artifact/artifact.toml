@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "HL 韭菜分析仪"
+version = "1.0.0"
+id = "artifacts/hl-analyzer"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22087
+
+[services.development]
+run = "pnpm --filter @workspace/hl-analyzer run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/hl-analyzer", "run", "build" ]
+publicDir = "artifacts/hl-analyzer/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22087"
+BASE_PATH = "/"

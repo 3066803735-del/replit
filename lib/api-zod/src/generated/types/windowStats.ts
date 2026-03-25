@@ -5,45 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
-
-export interface AnalyzeRequest {
-  /** List of wallet addresses to analyze */
-  wallets: string[];
-  /** Time windows in days (e.g. [3, 7, 30]) */
-  timeWindows?: number[];
-  /** Merge window in minutes for dedup fills */
-  mergeMinutes?: number;
-  /** Your taker fee rate in percent (e.g. 0.035) */
-  myFeeRate?: number;
-}
-
-export interface CoinVolume {
-  coin: string;
-  volume: number;
-  fees: number;
-  pct: number;
-}
-
-export interface GlobalStats {
-  totalVolume: number;
-  totalFees: number;
-  totalPnl: number;
-  netPnl: number;
-  feeRate: number;
-  topCoins: CoinVolume[];
-}
-
-export interface CoinStat {
-  coin: string;
-  trades: number;
-  wins: number;
-  volume: number;
-  pnl: number;
-  winRate: number;
-}
+import type { CoinStat } from "./coinStat";
 
 export interface WindowStats {
   days: number;
@@ -88,22 +50,4 @@ export interface WindowStats {
   leekScore?: number;
   diagnoses?: string[];
   conclusion?: string;
-}
-
-export interface WalletResult {
-  wallet: string;
-  error?: string;
-  rawFillCount?: number;
-  cleanFillCount?: number;
-  waterRatio?: number;
-  globalStats?: GlobalStats;
-  windowStats?: WindowStats[];
-}
-
-export interface AnalyzeResponse {
-  results: WalletResult[];
-}
-
-export interface ErrorResponse {
-  error: string;
 }

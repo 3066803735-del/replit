@@ -48,6 +48,16 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Features
+
+### HL 韭菜分析仪 (HL R.A.D.A.R.)
+- **Frontend**: `artifacts/hl-analyzer` — React + Vite dark-mode trading terminal UI
+- **Backend**: `artifacts/api-server/src/routes/analyze.ts` — Hyperliquid wallet analysis API
+- Fetches live fills from Hyperliquid API (https://api.hyperliquid.xyz/info)
+- Deduplicates fills (configurable merge window), computes per-window stats
+- Reverse copy-trade simulation with leek scoring (0-10+)
+- Config: wallets, time windows, merge minutes, taker fee rate
+
 ## Packages
 
 ### `artifacts/api-server` (`@workspace/api-server`)

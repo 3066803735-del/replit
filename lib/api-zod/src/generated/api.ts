@@ -14,3 +14,113 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Fetch and analyze Hyperliquid wallet fills
+ * @summary Analyze wallets
+ */
+export const AnalyzeWalletsBody = zod.object({
+  wallets: zod
+    .array(zod.string())
+    .describe("List of wallet addresses to analyze"),
+  timeWindows: zod
+    .array(zod.number())
+    .optional()
+    .describe("Time windows in days (e.g. [3, 7, 30])"),
+  mergeMinutes: zod
+    .number()
+    .optional()
+    .describe("Merge window in minutes for dedup fills"),
+  myFeeRate: zod
+    .number()
+    .optional()
+    .describe("Your taker fee rate in percent (e.g. 0.035)"),
+});
+
+export const AnalyzeWalletsResponse = zod.object({
+  results: zod.array(
+    zod.object({
+      wallet: zod.string(),
+      error: zod.string().optional(),
+      rawFillCount: zod.number().optional(),
+      cleanFillCount: zod.number().optional(),
+      waterRatio: zod.number().optional(),
+      globalStats: zod
+        .object({
+          totalVolume: zod.number(),
+          totalFees: zod.number(),
+          totalPnl: zod.number(),
+          netPnl: zod.number(),
+          feeRate: zod.number(),
+          topCoins: zod.array(
+            zod.object({
+              coin: zod.string(),
+              volume: zod.number(),
+              fees: zod.number(),
+              pct: zod.number(),
+            }),
+          ),
+        })
+        .optional(),
+      windowStats: zod
+        .array(
+          zod.object({
+            days: zod.number(),
+            trades: zod.number(),
+            winRate: zod.number().optional(),
+            netPnl: zod.number().optional(),
+            profitFactor: zod.number().optional(),
+            avgRoi: zod.number().optional(),
+            freq: zod.number().optional(),
+            longWr: zod.number().optional(),
+            shortWr: zod.number().optional(),
+            avgWin: zod.number().optional(),
+            avgLoss: zod.number().optional(),
+            pnlRatio: zod.number().optional(),
+            maxWin: zod.number().optional(),
+            maxLoss: zod.number().optional(),
+            maxLossStreak: zod.number().optional(),
+            maxWinStreak: zod.number().optional(),
+            fees: zod.number().optional(),
+            avgHoldTotalH: zod.number().optional(),
+            avgHoldWinH: zod.number().optional(),
+            avgHoldLossH: zod.number().optional(),
+            totalVolume: zod.number().optional(),
+            avgNotional: zod.number().optional(),
+            feeDrag: zod.number().optional(),
+            posCv: zod.number().optional(),
+            martingaleSignals: zod.number().optional(),
+            nightRatio: zod.number().optional(),
+            largeLossEvents: zod.number().optional(),
+            recoveryFactor: zod.number().optional(),
+            expectValue: zod.number().optional(),
+            concentrationRatio: zod.number().optional(),
+            top3Coins: zod
+              .array(
+                zod.object({
+                  coin: zod.string(),
+                  trades: zod.number(),
+                  wins: zod.number(),
+                  volume: zod.number(),
+                  pnl: zod.number(),
+                  winRate: zod.number(),
+                }),
+              )
+              .optional(),
+            reverseNetPnl: zod.number().optional(),
+            reverseWinRate: zod.number().optional(),
+            reverseAvgWin: zod.number().optional(),
+            reverseAvgLoss: zod.number().optional(),
+            reversePnlRatio: zod.number().optional(),
+            myFees: zod.number().optional(),
+            rawEdge: zod.number().optional(),
+            breakevenFeeRate: zod.number().optional(),
+            leekScore: zod.number().optional(),
+            diagnoses: zod.array(zod.string()).optional(),
+            conclusion: zod.string().optional(),
+          }),
+        )
+        .optional(),
+    }),
+  ),
+});

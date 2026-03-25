@@ -1,0 +1,11 @@
+packages:
+  "framer-motion": "Smooth layout animations and tab transitions for the data-dense dashboard"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility to safely merge Tailwind CSS classes"
+  "lucide-react": "Beautiful consistent icons for the terminal interface"
+
+images: []
+
+notes:
+  - "Assuming @workspace/api-client-react exports useAnalyzeWallets and relevant types at its root or generated path."
+  - "The UI is designed as a dark-mode crypto trading terminal ('Radar') focusing on data density and high-contrast indicators for profitability."

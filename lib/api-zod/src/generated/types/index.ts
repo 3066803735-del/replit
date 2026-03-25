@@ -6,4 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./analyzeRequest";
+export * from "./analyzeResponse";
+export * from "./coinStat";
+export * from "./coinVolume";
+export * from "./errorResponse";
+export * from "./globalStats";
 export * from "./healthStatus";
+export * from "./walletResult";
+export * from "./windowStats";
