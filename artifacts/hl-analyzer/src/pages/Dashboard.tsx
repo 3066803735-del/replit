@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6,7 +5,6 @@ import { motion } from "framer-motion";
 import { Radar, Settings2, ShieldAlert } from "lucide-react";
 
 import { useAnalyzeWallets } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -14,8 +12,8 @@ import { WalletDashboard } from "@/components/WalletDashboard";
 import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
-  wallets: z.string().min(1, "Enter at least one wallet address"),
-  timeWindows: z.string().regex(/^(\d+\s*,\s*)*\d+$/, "Must be comma-separated numbers (e.g. 3,7,30)"),
+  wallets: z.string().min(1, "请输入至少一个钱包地址"),
+  timeWindows: z.string().regex(/^(\d+\s*,\s*)*\d+$/, "请输入逗号分隔的天数，例如 3,7,30"),
   mergeMinutes: z.coerce.number().min(0).max(60),
   myFeeRate: z.coerce.number().min(0).max(1),
 });
@@ -43,7 +41,7 @@ export function Dashboard() {
       .filter((w) => w.length > 0);
 
     if (walletsList.length === 0) {
-      toast({ title: "Error", description: "No valid wallets found", variant: "destructive" });
+      toast({ title: "错误", description: "未找到有效的钱包地址", variant: "destructive" });
       return;
     }
 
@@ -64,8 +62,8 @@ export function Dashboard() {
       {
         onError: (error) => {
           toast({
-            title: "Analysis Failed",
-            description: error.error || "An unexpected error occurred",
+            title: "分析失败",
+            description: error.error || "发生未知错误",
             variant: "destructive",
           });
         },
@@ -75,26 +73,26 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col lg:flex-row">
-      {/* SIDEBAR CONFIG */}
+      {/* 左侧配置面板 */}
       <aside className="w-full lg:w-80 border-b lg:border-r border-panel-border bg-panel/30 p-6 flex flex-col shrink-0 lg:h-screen lg:sticky top-0 overflow-y-auto">
         <div className="flex items-center gap-3 mb-8">
           <div className="p-2 bg-primary/10 rounded-lg border border-primary/30 shadow-[0_0_15px_rgba(51,210,255,0.2)]">
             <Radar className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="font-sans font-bold text-lg leading-tight tracking-tight text-foreground text-glow-primary">HL R.A.D.A.R.</h1>
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Reverse Trading Terminal</p>
+            <h1 className="font-sans font-bold text-lg leading-tight tracking-tight text-foreground text-glow-primary">HL 韭菜雷达</h1>
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">反向跟单分析终端</p>
           </div>
         </div>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 flex-1">
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              Target Wallets
+              目标钱包地址
             </label>
             <Textarea
               {...form.register("wallets")}
-              placeholder="0x123...&#10;0xabc...&#10;(one per line or comma separated)"
+              placeholder={"0x123...\n0xabc...\n（每行一个，或用逗号分隔）"}
               className="font-mono text-xs h-32 bg-background border-panel-border/50 focus-visible:ring-primary/50"
             />
             {form.formState.errors.wallets && (
@@ -104,11 +102,11 @@ export function Dashboard() {
 
           <div className="space-y-4 pt-4 border-t border-panel-border/50">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              <Settings2 className="h-4 w-4" /> Parameters
+              <Settings2 className="h-4 w-4" /> 参数配置
             </div>
             
             <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">Time Windows (Days)</label>
+              <label className="text-xs text-muted-foreground">时间窗口（天）</label>
               <Input
                 {...form.register("timeWindows")}
                 className="font-mono text-sm bg-background border-panel-border/50"
@@ -117,7 +115,7 @@ export function Dashboard() {
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">Merge Fills (Mins)</label>
+                <label className="text-xs text-muted-foreground">碎单合并（分钟）</label>
                 <Input
                   type="number"
                   step="0.1"
@@ -126,7 +124,7 @@ export function Dashboard() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">My Fee Rate (%)</label>
+                <label className="text-xs text-muted-foreground">我方费率（%）</label>
                 <Input
                   type="number"
                   step="0.001"
@@ -144,21 +142,21 @@ export function Dashboard() {
           >
             {isPending ? (
               <span className="flex items-center gap-2">
-                <Radar className="h-4 w-4 animate-spin" /> Scanning...
+                <Radar className="h-4 w-4 animate-spin" /> 扫描中...
               </span>
             ) : (
-              "Initialize Scan"
+              "开始扫描"
             )}
           </Button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-panel-border/50 text-[10px] text-muted-foreground/60 leading-relaxed font-mono">
-          SYSTEM: Reverse Copy Strategy Engine v2.0.<br/>
-          WARNING: Past performance does not guarantee future results. High slippage and fee drag can invalidate theoretical edges.
+          系统：反向跟单策略引擎 v2.0<br/>
+          警告：历史数据不代表未来收益。实际跟单存在滑点与延迟，结果偏乐观，仅供参考。
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
+      {/* 主内容区 */}
       <main className="flex-1 p-6 lg:p-8 overflow-x-hidden min-h-[50vh]">
         {isPending ? (
           <div className="h-full w-full flex flex-col items-center justify-center text-primary space-y-6">
@@ -167,7 +165,7 @@ export function Dashboard() {
               <div className="absolute inset-2 rounded-full border-2 border-primary/40 animate-ping" style={{ animationDelay: '0.2s' }}></div>
               <Radar className="h-16 w-16 animate-pulse text-glow-primary relative z-10" />
             </div>
-            <div className="font-mono text-sm tracking-widest animate-pulse">EXTRACTING ON-CHAIN LOGS...</div>
+            <div className="font-mono text-sm tracking-widest animate-pulse">正在抓取链上数据...</div>
           </div>
         ) : data?.results ? (
           <div className="space-y-8 max-w-6xl mx-auto">
@@ -185,9 +183,9 @@ export function Dashboard() {
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground/50 space-y-4">
             <ShieldAlert className="h-16 w-16 opacity-20" />
-            <h2 className="text-xl font-sans tracking-tight">System Standby</h2>
+            <h2 className="text-xl font-sans tracking-tight">系统待机中</h2>
             <p className="text-sm font-mono max-w-md text-center">
-              Input target wallet addresses in the config panel to begin behavioral analysis and locate reverse-copy opportunities.
+              在左侧输入目标钱包地址，开始行为分析，寻找反向跟单机会。
             </p>
           </div>
         )}
