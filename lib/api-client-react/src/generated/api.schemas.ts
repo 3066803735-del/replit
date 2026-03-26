@@ -45,6 +45,12 @@ export interface CoinStat {
   winRate: number;
 }
 
+export interface PnlPoint {
+  time: number;
+  pnl: number;
+  cumulative: number;
+}
+
 export interface WindowStats {
   days: number;
   trades: number;
@@ -88,6 +94,7 @@ export interface WindowStats {
   leekScore?: number;
   diagnoses?: string[];
   conclusion?: string;
+  pnlSeries?: PnlPoint[];
 }
 
 export interface WalletResult {

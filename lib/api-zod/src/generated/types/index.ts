@@ -13,5 +13,6 @@ export * from "./coinVolume";
 export * from "./errorResponse";
 export * from "./globalStats";
 export * from "./healthStatus";
+export * from "./pnlPoint";
 export * from "./walletResult";
 export * from "./windowStats";

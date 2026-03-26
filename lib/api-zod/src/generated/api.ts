@@ -118,6 +118,15 @@ export const AnalyzeWalletsResponse = zod.object({
             leekScore: zod.number().optional(),
             diagnoses: zod.array(zod.string()).optional(),
             conclusion: zod.string().optional(),
+            pnlSeries: zod
+              .array(
+                zod.object({
+                  time: zod.number(),
+                  pnl: zod.number(),
+                  cumulative: zod.number(),
+                }),
+              )
+              .optional(),
           }),
         )
         .optional(),

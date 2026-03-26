@@ -255,6 +255,10 @@ components:
             type: string
         conclusion:
           type: string
+        pnlSeries:
+          type: array
+          items:
+            $ref: "#/components/schemas/PnlPoint"
       required:
         - days
         - trades
@@ -281,6 +285,20 @@ components:
         - volume
         - pnl
         - winRate
+
+    PnlPoint:
+      type: object
+      properties:
+        time:
+          type: number
+        pnl:
+          type: number
+        cumulative:
+          type: number
+      required:
+        - time
+        - pnl
+        - cumulative
 
     ErrorResponse:
       type: object

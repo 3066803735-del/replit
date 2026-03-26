@@ -1,14 +1,39 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Cell, Legend,
+} from "recharts";
 import { WalletResult } from "@workspace/api-client-react/src/generated/api.schemas";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatBox } from "@/components/StatBox";
 import { formatCurrency, formatPercent, formatCompact, getColorForValue, cn } from "@/lib/utils";
-import { Activity, AlertTriangle, CheckCircle2, Skull, Target, Zap, Droplets } from "lucide-react";
+import {
+  Activity, AlertTriangle, CheckCircle2, Skull, Target, Zap,
+  Droplets, Moon, BarChart2, TrendingUp,
+} from "lucide-react";
 
 interface WalletDashboardProps {
   result: WalletResult;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function PnlTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
+  if (!d) return null;
+  return (
+    <div className="bg-panel border border-panel-border rounded-lg p-3 text-xs font-mono shadow-xl space-y-1">
+      <div>第 {d.idx + 1} 笔</div>
+      <div className={d.pnl >= 0 ? "text-success" : "text-danger"}>
+        单笔: {formatCurrency(d.pnl)}
+      </div>
+      <div className={d.cumulative >= 0 ? "text-success" : "text-danger"}>
+        累计: {formatCurrency(d.cumulative)}
+      </div>
+    </div>
+  );
 }
 
 export function WalletDashboard({ result }: WalletDashboardProps) {
@@ -20,10 +45,10 @@ export function WalletDashboard({ result }: WalletDashboardProps) {
     return (
       <Card className="border-danger/50 bg-danger/5">
         <CardHeader>
-          <CardTitle className="text-danger flex items-center gap-2 font-mono">
+          <div className="text-danger flex items-center gap-2 font-mono font-bold">
             <AlertTriangle className="h-5 w-5" />
             {result.wallet}
-          </CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">获取数据失败：{result.error}</p>
@@ -33,15 +58,21 @@ export function WalletDashboard({ result }: WalletDashboardProps) {
   }
 
   const activeStats = result.windowStats?.find((w) => w.days === activeTab);
-
   const leekScore = activeStats?.leekScore || 0;
   let scoreColor = "text-success";
   if (leekScore >= 7) scoreColor = "text-danger text-glow-danger";
   else if (leekScore >= 4) scoreColor = "text-warning text-glow-warning";
 
+  const chartData = (activeStats?.pnlSeries ?? []).map((p, idx) => ({
+    idx,
+    pnl: p.pnl,
+    cumulative: p.cumulative,
+    date: new Date(p.time).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }),
+  }));
+
   return (
     <Card className="overflow-hidden border-panel-border/80 shadow-2xl glass-panel">
-      {/* 头部摘要 */}
+      {/* ── 头部摘要 ── */}
       <div className="bg-panel/50 border-b border-panel-border p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
@@ -53,7 +84,6 @@ export function WalletDashboard({ result }: WalletDashboardProps) {
               已脱水 {(result.waterRatio || 0).toFixed(1)}%
             </Badge>
           </div>
-          
           {activeStats?.conclusion && (
             <div className="flex items-center gap-2">
               <Target className={cn("h-4 w-4", leekScore >= 7 ? "text-danger" : leekScore >= 4 ? "text-warning" : "text-success")} />
@@ -61,7 +91,6 @@ export function WalletDashboard({ result }: WalletDashboardProps) {
             </div>
           )}
         </div>
-
         <div className="flex flex-col items-end">
           <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">韭菜评分</div>
           <div className="flex items-center gap-1">
@@ -76,7 +105,7 @@ export function WalletDashboard({ result }: WalletDashboardProps) {
       </div>
 
       <CardContent className="p-0">
-        {/* 全历史总览 */}
+        {/* ── 全历史总览 ── */}
         {result.globalStats && (
           <div className="bg-background/50 grid grid-cols-2 md:grid-cols-4 gap-px border-b border-panel-border">
             <div className="p-4">
@@ -102,10 +131,10 @@ export function WalletDashboard({ result }: WalletDashboardProps) {
           </div>
         )}
 
-        {/* 时间窗口选项卡 */}
+        {/* ── 时间窗口 Tabs ── */}
         {result.windowStats && result.windowStats.length > 0 && (
-          <div className="p-6">
-            <div className="flex flex-wrap gap-2 mb-6">
+          <div className="p-6 space-y-8">
+            <div className="flex flex-wrap gap-2">
               {result.windowStats.map((stat) => (
                 <button
                   key={stat.days}
@@ -132,8 +161,8 @@ export function WalletDashboard({ result }: WalletDashboardProps) {
                   transition={{ duration: 0.2 }}
                   className="space-y-8"
                 >
-                  
-                  {/* AI 诊断标签 */}
+
+                  {/* ── AI 诊断标签 ── */}
                   {activeStats.diagnoses && activeStats.diagnoses.length > 0 && (
                     <div className="flex flex-wrap gap-2 p-4 rounded-lg bg-danger/5 border border-danger/20">
                       {activeStats.diagnoses.map((diag, i) => {
@@ -147,123 +176,315 @@ export function WalletDashboard({ result }: WalletDashboardProps) {
                     </div>
                   )}
 
-                  {/* 反向跟单模拟 */}
+                  {/* ── 反向跟单模拟 ── */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2 uppercase tracking-widest border-b border-panel-border pb-2">
-                      <Zap className="h-4 w-4 text-primary" />
-                      反向跟单模拟盈亏（1:1 镜像）
-                    </h3>
+                    <SectionTitle icon={<Zap className="h-4 w-4 text-primary" />} title="反向跟单模拟盈亏（1:1 镜像）" />
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                      <StatBox 
-                        label="扣费前毛利润" 
+                      <StatBox
+                        label="扣费前毛利润"
                         value={<span className={getColorForValue(activeStats.rawEdge)}>{formatCurrency(activeStats.rawEdge)}</span>}
                       />
-                      <StatBox 
-                        label="我方手续费预估" 
+                      <StatBox
+                        label="我方手续费预估"
                         value={<span className="text-warning">-{formatCurrency(activeStats.myFees)}</span>}
                       />
-                      <StatBox 
-                        label="反向跟单净盈亏" 
-                        highlight={activeStats.reverseNetPnl && activeStats.reverseNetPnl > 0 ? true : false}
+                      <StatBox
+                        label="反向跟单净盈亏"
+                        highlight={!!(activeStats.reverseNetPnl && activeStats.reverseNetPnl > 0)}
                         value={<span className={getColorForValue(activeStats.reverseNetPnl)}>{formatCurrency(activeStats.reverseNetPnl)}</span>}
                         subtext={
-                           <span className="flex items-center gap-1">
-                             {activeStats.reverseNetPnl && activeStats.reverseNetPnl > 0 ? <CheckCircle2 className="h-3 w-3 text-success"/> : <Skull className="h-3 w-3 text-danger"/>}
-                             {activeStats.reverseNetPnl && activeStats.reverseNetPnl > 0 ? "策略可行，正收益" : "手续费吃掉优势"}
-                           </span>
+                          <span className="flex items-center gap-1">
+                            {activeStats.reverseNetPnl && activeStats.reverseNetPnl > 0
+                              ? <><CheckCircle2 className="h-3 w-3 text-success" /> 策略可行，正收益</>
+                              : <><Skull className="h-3 w-3 text-danger" /> 手续费吃掉优势</>}
+                          </span>
                         }
                       />
-                      <StatBox 
-                        label="盈亏平衡费率" 
+                      <StatBox
+                        label="盈亏平衡费率"
                         value={<span className="text-foreground">{activeStats.breakevenFeeRate ? `${activeStats.breakevenFeeRate.toFixed(4)}%` : '不适用'}</span>}
                       />
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* 基础交易数据 */}
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2 uppercase tracking-widest border-b border-panel-border pb-2">
-                        <Activity className="h-4 w-4 text-muted-foreground" />
-                        基础交易数据
-                      </h3>
-                      <div className="grid grid-cols-2 gap-3">
-                        <StatBox 
-                          label="胜率" 
-                          value={
-                            <span className={cn(activeStats.winRate && activeStats.winRate < 40 ? "text-danger" : "text-foreground")}>
-                              {formatPercent(activeStats.winRate)}
-                            </span>
-                          }
-                          subtext={`多头 ${formatPercent(activeStats.longWr)} | 空头 ${formatPercent(activeStats.shortWr)}`}
-                        />
-                        <StatBox 
-                          label="净盈亏" 
-                          value={<span className={getColorForValue(activeStats.netPnl)}>{formatCurrency(activeStats.netPnl)}</span>}
-                          subtext={`共 ${activeStats.trades} 笔（${activeStats.freq?.toFixed(1)} 笔/天）`}
-                        />
-                        <StatBox 
-                          label="单笔数学期望" 
-                          value={<span className={getColorForValue(activeStats.expectValue)}>{formatCurrency(activeStats.expectValue)}</span>}
-                        />
-                        <StatBox 
-                          label="手续费侵蚀率" 
-                          value={<span className={cn(activeStats.feeDrag && activeStats.feeDrag > 50 ? "text-danger text-glow-danger" : "text-warning")}>{activeStats.feeDrag?.toFixed(1)}%</span>}
-                          subtext="占毛利润的比例"
-                        />
-                      </div>
-                    </div>
-
-                    {/* 韭菜心理画像 */}
-                    <div className="space-y-3">
-                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2 uppercase tracking-widest border-b border-panel-border pb-2">
-                        <Skull className="h-4 w-4 text-muted-foreground" />
-                        韭菜心理画像
-                      </h3>
-                      <div className="grid grid-cols-2 gap-3">
-                        <StatBox 
-                          label="盈亏持仓时长" 
-                          value={
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="text-success">{activeStats.avgHoldWinH?.toFixed(1)}h</span>
-                              <span className="text-muted-foreground">/</span>
-                              <span className="text-danger">{activeStats.avgHoldLossH?.toFixed(1)}h</span>
-                            </div>
-                          }
-                          subtext={activeStats.avgHoldLossH && activeStats.avgHoldWinH && activeStats.avgHoldLossH > activeStats.avgHoldWinH * 2 ? "🔴 截断利润、死扛亏损" : "持仓模式正常"}
-                        />
-                        <StatBox 
-                          label="最大盈利 / 亏损" 
-                          value={
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="text-success">{formatCompact(activeStats.maxWin)}</span>
-                              <span className="text-muted-foreground">/</span>
-                              <span className="text-danger">-{formatCompact(Math.abs(activeStats.maxLoss || 0))}</span>
-                            </div>
-                          }
-                          subtext={`${activeStats.largeLossEvents} 次超额亏损事件`}
-                        />
-                        <StatBox 
-                          label="仓位规模变异系数" 
-                          value={
-                            <span className={cn(activeStats.posCv && activeStats.posCv > 1.5 ? "text-danger" : "text-foreground")}>
-                              {activeStats.posCv?.toFixed(2)}
-                            </span>
-                          }
-                          subtext={activeStats.posCv && activeStats.posCv > 1.5 ? "🔴 仓位极度混乱" : "仓位较稳定"}
-                        />
-                        <StatBox 
-                          label="马丁格尔信号次数" 
-                          value={
-                            <span className={cn(activeStats.martingaleSignals && activeStats.martingaleSignals >= 3 ? "text-danger text-glow-danger font-bold" : "text-foreground")}>
-                              {activeStats.martingaleSignals} 次
-                            </span>
-                          }
-                          subtext={activeStats.martingaleSignals && activeStats.martingaleSignals >= 3 ? "🔴 高爆仓风险" : "未发现倍投行为"}
-                        />
-                      </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                      <StatBox
+                        label="反向胜率"
+                        value={<span className={getColorForValue(activeStats.reverseWinRate)}>{formatPercent(activeStats.reverseWinRate)}</span>}
+                        subtext="他亏 = 我赢"
+                      />
+                      <StatBox
+                        label="反向均赢 / 均亏"
+                        value={
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-success">{formatCurrency(activeStats.reverseAvgWin)}</span>
+                            <span className="text-muted-foreground">/</span>
+                            <span className="text-danger">{formatCurrency(activeStats.reverseAvgLoss)}</span>
+                          </div>
+                        }
+                      />
+                      <StatBox
+                        label="反向盈亏比"
+                        value={<span className={getColorForValue((activeStats.reversePnlRatio ?? 0) - 1)}>{activeStats.reversePnlRatio?.toFixed(2)}</span>}
+                      />
                     </div>
                   </div>
+
+                  {/* ── 基础交易数据 ── */}
+                  <div className="space-y-3">
+                    <SectionTitle icon={<Activity className="h-4 w-4 text-muted-foreground" />} title="基础交易数据" />
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                      <StatBox
+                        label="胜率"
+                        value={
+                          <span className={cn(activeStats.winRate && activeStats.winRate < 40 ? "text-danger" : "text-foreground")}>
+                            {formatPercent(activeStats.winRate)}
+                          </span>
+                        }
+                        subtext={`多头 ${formatPercent(activeStats.longWr)} | 空头 ${formatPercent(activeStats.shortWr)}`}
+                      />
+                      <StatBox
+                        label="净盈亏"
+                        value={<span className={getColorForValue(activeStats.netPnl)}>{formatCurrency(activeStats.netPnl)}</span>}
+                        subtext={`共 ${activeStats.trades} 笔（${activeStats.freq?.toFixed(1)} 笔/天）`}
+                      />
+                      <StatBox
+                        label="总手续费"
+                        value={<span className="text-warning">{formatCurrency(activeStats.fees)}</span>}
+                        subtext={`侵蚀率 ${activeStats.feeDrag?.toFixed(1)}%${activeStats.feeDrag && activeStats.feeDrag > 50 ? " ⚠️严重" : ""}`}
+                      />
+                      <StatBox
+                        label="纯净收益率/笔"
+                        value={<span className={getColorForValue(activeStats.avgRoi)}>{activeStats.avgRoi?.toFixed(3)}%</span>}
+                        subtext="无杠杆价格波动捕捉"
+                      />
+                      <StatBox
+                        label="单笔数学期望"
+                        value={<span className={getColorForValue(activeStats.expectValue)}>{formatCurrency(activeStats.expectValue)}</span>}
+                        subtext={activeStats.expectValue && activeStats.expectValue < 0 ? "🔴 负期望，长期必亏" : "🟢 正期望"}
+                      />
+                      <StatBox
+                        label="均赢 / 均亏"
+                        value={
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-success">{formatCurrency(activeStats.avgWin)}</span>
+                            <span className="text-muted-foreground">/</span>
+                            <span className="text-danger">{formatCurrency(activeStats.avgLoss)}</span>
+                          </div>
+                        }
+                      />
+                      <StatBox
+                        label="盈亏比"
+                        value={<span className={getColorForValue((activeStats.pnlRatio ?? 0) - 1)}>{activeStats.pnlRatio?.toFixed(2)}</span>}
+                        subtext="均赢 ÷ 均亏"
+                      />
+                      <StatBox
+                        label="盈利因子"
+                        value={
+                          <span className={cn(activeStats.profitFactor && activeStats.profitFactor < 1 ? "text-danger" : "text-foreground")}>
+                            {activeStats.profitFactor === 999 ? "∞" : activeStats.profitFactor?.toFixed(2)}
+                          </span>
+                        }
+                        subtext={activeStats.profitFactor && activeStats.profitFactor < 0.6 ? "🩸 超级血包" : "毛盈 ÷ 毛亏"}
+                      />
+                      <StatBox
+                        label="最大连胜 / 连败"
+                        value={
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-success">{activeStats.maxWinStreak} 连</span>
+                            <span className="text-muted-foreground">/</span>
+                            <span className={cn(activeStats.maxLossStreak && activeStats.maxLossStreak >= 6 ? "text-danger font-bold" : "text-danger")}>
+                              {activeStats.maxLossStreak} 连
+                            </span>
+                          </div>
+                        }
+                        subtext={activeStats.maxLossStreak && activeStats.maxLossStreak >= 6 ? "🔴 情绪失控指数极高" : ""}
+                      />
+                      <StatBox
+                        label="总成交量"
+                        value={<span className="text-foreground">{formatCompact(activeStats.totalVolume)}</span>}
+                      />
+                      <StatBox
+                        label="均仓位价值"
+                        value={<span className="text-foreground">{formatCurrency(activeStats.avgNotional)}</span>}
+                      />
+                    </div>
+                  </div>
+
+                  {/* ── 韭菜心理画像 ── */}
+                  <div className="space-y-3">
+                    <SectionTitle icon={<Skull className="h-4 w-4 text-muted-foreground" />} title="韭菜心理画像" />
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                      <StatBox
+                        label="总体平均持仓"
+                        value={<span className="text-foreground">{activeStats.avgHoldTotalH?.toFixed(1)}h</span>}
+                      />
+                      <StatBox
+                        label="盈利单 / 亏损单持仓"
+                        value={
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-success">{activeStats.avgHoldWinH?.toFixed(1)}h</span>
+                            <span className="text-muted-foreground">/</span>
+                            <span className="text-danger">{activeStats.avgHoldLossH?.toFixed(1)}h</span>
+                          </div>
+                        }
+                        subtext={
+                          activeStats.avgHoldLossH && activeStats.avgHoldWinH && activeStats.avgHoldLossH > activeStats.avgHoldWinH * 2
+                            ? "🔴 截断利润、死扛亏损"
+                            : "持仓模式正常"
+                        }
+                      />
+                      <StatBox
+                        label="最大盈利 / 亏损"
+                        value={
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-success">{formatCompact(activeStats.maxWin)}</span>
+                            <span className="text-muted-foreground">/</span>
+                            <span className="text-danger">-{formatCompact(Math.abs(activeStats.maxLoss || 0))}</span>
+                          </div>
+                        }
+                        subtext={`${activeStats.largeLossEvents} 次超额亏损事件`}
+                      />
+                      <StatBox
+                        label="回撤恢复因子"
+                        value={
+                          <span className={cn(activeStats.recoveryFactor && activeStats.recoveryFactor < 1 ? "text-danger" : "text-foreground")}>
+                            {activeStats.recoveryFactor === 999 ? "∞" : activeStats.recoveryFactor?.toFixed(2)}
+                          </span>
+                        }
+                        subtext={activeStats.recoveryFactor && activeStats.recoveryFactor < 1 ? "⚠️ 亏损未能覆盖" : "净盈亏 ÷ 最大单笔亏"}
+                      />
+                      <StatBox
+                        label="仓位规模变异系数"
+                        value={
+                          <span className={cn(activeStats.posCv && activeStats.posCv > 1.5 ? "text-danger text-glow-danger font-bold" : "text-foreground")}>
+                            {activeStats.posCv?.toFixed(2)}
+                          </span>
+                        }
+                        subtext={activeStats.posCv && activeStats.posCv > 1.5 ? "🔴 仓位极度混乱" : activeStats.posCv && activeStats.posCv > 0.8 ? "⚠️ 波动较大" : "✅ 仓位较稳定"}
+                      />
+                      <StatBox
+                        label="马丁格尔信号次数"
+                        value={
+                          <span className={cn(activeStats.martingaleSignals && activeStats.martingaleSignals >= 3 ? "text-danger text-glow-danger font-bold" : "text-foreground")}>
+                            {activeStats.martingaleSignals} 次
+                          </span>
+                        }
+                        subtext={activeStats.martingaleSignals && activeStats.martingaleSignals >= 3 ? "🔴 高爆仓风险" : activeStats.martingaleSignals && activeStats.martingaleSignals >= 1 ? "⚠️ 有加仓迹象" : "✅ 未发现"}
+                      />
+                      <StatBox
+                        label="深夜交易占比 (UTC 0-6)"
+                        value={
+                          <span className={cn(activeStats.nightRatio && activeStats.nightRatio > 30 ? "text-danger" : "text-foreground")}>
+                            {activeStats.nightRatio?.toFixed(1)}%
+                          </span>
+                        }
+                        subtext={activeStats.nightRatio && activeStats.nightRatio > 30 ? "🌙 高度夜间情绪交易" : activeStats.nightRatio && activeStats.nightRatio > 15 ? "⚠️ 有一定夜间交易" : "✅ 正常"}
+                      />
+                      <StatBox
+                        label="Top3 币种集中度"
+                        value={
+                          <span className={cn(activeStats.concentrationRatio && activeStats.concentrationRatio > 80 ? "text-warning" : "text-foreground")}>
+                            {activeStats.concentrationRatio?.toFixed(1)}%
+                          </span>
+                        }
+                        subtext={activeStats.concentrationRatio && activeStats.concentrationRatio > 80 ? "♟️ 孤注一掷" : activeStats.concentrationRatio && activeStats.concentrationRatio > 60 ? "⚠️ 偏集中" : "✅ 较分散"}
+                      />
+                    </div>
+
+                    {/* Top3 币种明细表 */}
+                    {activeStats.top3Coins && activeStats.top3Coins.length > 0 && (
+                      <div className="rounded-lg border border-panel-border overflow-hidden">
+                        <div className="bg-panel/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex">
+                          <span className="w-24">币种</span>
+                          <span className="w-16 text-right">笔数</span>
+                          <span className="w-20 text-right">胜率</span>
+                          <span className="flex-1 text-right">成交量</span>
+                          <span className="flex-1 text-right">盈亏</span>
+                        </div>
+                        {activeStats.top3Coins.map((c) => (
+                          <div key={c.coin} className="px-4 py-2 text-xs font-mono flex items-center border-t border-panel-border/50 hover:bg-panel/20 transition-colors">
+                            <span className="w-24 text-primary font-bold">{c.coin}</span>
+                            <span className="w-16 text-right text-muted-foreground">{c.trades}</span>
+                            <span className="w-20 text-right">{formatPercent(c.winRate)}</span>
+                            <span className="flex-1 text-right text-muted-foreground">{formatCompact(c.volume)}</span>
+                            <span className={cn("flex-1 text-right font-semibold", getColorForValue(c.pnl))}>{formatCurrency(c.pnl)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── PnL 盈亏图 ── */}
+                  {chartData.length > 0 && (
+                    <div className="space-y-3">
+                      <SectionTitle icon={<BarChart2 className="h-4 w-4 text-muted-foreground" />} title="逐笔盈亏 & 累计净值曲线" />
+                      <div className="rounded-lg border border-panel-border bg-background/50 p-4">
+                        <div className="flex items-center gap-6 mb-4 text-[10px] font-mono text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-sm bg-[#22c55e] inline-block" />
+                            盈利笔
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-3 h-3 rounded-sm bg-[#ef4444] inline-block" />
+                            亏损笔
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <TrendingUp className="w-3 h-3 text-primary" />
+                            累计净值
+                          </span>
+                        </div>
+                        <ResponsiveContainer width="100%" height={260}>
+                          <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                            <XAxis
+                              dataKey="idx"
+                              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(v) => `#${v + 1}`}
+                              interval={Math.max(0, Math.floor(chartData.length / 8) - 1)}
+                            />
+                            <YAxis
+                              yAxisId="bar"
+                              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(v) => `$${v >= 1000 || v <= -1000 ? (v / 1000).toFixed(1) + "K" : v.toFixed(0)}`}
+                              width={55}
+                            />
+                            <YAxis
+                              yAxisId="line"
+                              orientation="right"
+                              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(v) => `$${v >= 1000 || v <= -1000 ? (v / 1000).toFixed(1) + "K" : v.toFixed(0)}`}
+                              width={55}
+                            />
+                            <Tooltip content={<PnlTooltip />} />
+                            <ReferenceLine yAxisId="bar" y={0} stroke="rgba(255,255,255,0.15)" strokeWidth={1} />
+                            <ReferenceLine yAxisId="line" y={0} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
+                            <Bar yAxisId="bar" dataKey="pnl" maxBarSize={20} radius={[2, 2, 0, 0]}>
+                              {chartData.map((entry, index) => (
+                                <Cell key={index} fill={entry.pnl >= 0 ? "#22c55e" : "#ef4444"} fillOpacity={0.85} />
+                              ))}
+                            </Bar>
+                            <Line
+                              yAxisId="line"
+                              type="monotone"
+                              dataKey="cumulative"
+                              stroke="#33d2ff"
+                              strokeWidth={2}
+                              dot={false}
+                              activeDot={{ r: 4, fill: "#33d2ff" }}
+                            />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                        <div className="text-center text-[10px] text-muted-foreground/50 font-mono mt-1">
+                          共 {chartData.length} 笔平仓记录
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                 </motion.div>
               )}
@@ -272,5 +493,14 @@ export function WalletDashboard({ result }: WalletDashboardProps) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <h3 className="text-sm font-bold text-foreground flex items-center gap-2 uppercase tracking-widest border-b border-panel-border pb-2">
+      {icon}
+      {title}
+    </h3>
   );
 }

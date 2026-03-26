@@ -143,6 +143,7 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
   let totalHoldTimeWinMs = 0, totalHoldTimeLossMs = 0;
   const closeSizes: number[] = [];
   const pnlSeries: number[] = [];
+  const pnlPoints: { time: number; pnl: number }[] = [];
   const coinStats: Record<string, { trades: number; wins: number; volume: number; pnl: number }> = {};
   const lastOpenTime: Record<string, number> = {};
 
@@ -170,6 +171,7 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
       totalVolume += notional;
       closeSizes.push(sz);
       pnlSeries.push(pnl);
+      pnlPoints.push({ time: fillTime, pnl });
       if (!coinStats[coin]) coinStats[coin] = { trades: 0, wins: 0, volume: 0, pnl: 0 };
       coinStats[coin].trades++;
       coinStats[coin].volume += notional;
@@ -365,6 +367,13 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
     leekScore,
     diagnoses,
     conclusion,
+    pnlSeries: (() => {
+      let cum = 0;
+      return pnlPoints.map((p) => {
+        cum += p.pnl;
+        return { time: p.time, pnl: p.pnl, cumulative: cum };
+      });
+    })(),
   };
 }
 
