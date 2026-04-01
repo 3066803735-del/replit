@@ -3,6 +3,7 @@ import time
 import os
 import sys
 from collections import defaultdict
+import statistics
 
 # ================= 环境变量配置 =================
 ENV_WALLETS = os.getenv('TARGET_WALLETS', '0x2d143520a601068ed5046a943ab4b05edd459768,0x95f036ffcd2f8a58a415733176cbcd2e4cec2bce')
@@ -16,7 +17,6 @@ ENV_MERGE_MINUTES = float(os.getenv('MERGE_MINUTES', 2.0))
 MERGE_WINDOW_MS = int(ENV_MERGE_MINUTES * 60 * 1000)
 
 # 💰 反向跟单者自身的手续费率（%），默认 Hyperliquid taker 费率 0.035%
-#    若你有挂单返佣资格，可改为负值，例如 -0.01
 MY_TAKER_FEE_RATE = float(os.getenv('MY_FEE_RATE', 0.035))
 
 # ================= 数据拉取与清洗引擎 =================
@@ -74,7 +74,7 @@ def clean_and_merge_fills(raw_fills):
 
     return merged_list
 
-# ================= 全局成交量统计（全时间段，不受窗口限制）=================
+# ================= 全局成交量统计 =================
 def compute_global_volume_stats(cleaned_fills):
     """统计钱包有史以来全部成交量与手续费（脱水后）"""
     total_volume   = 0.0
@@ -89,15 +89,14 @@ def compute_global_volume_stats(cleaned_fills):
         pnl      = float(f.get('closedPnl', 0))
         coin     = f.get('coin', '?')
 
-        total_volume        += notional
-        total_fees          += fee
-        total_pnl           += pnl
-        coin_volume[coin]   += notional
-        coin_fees[coin]     += fee
+        # ✅ 开+平全部累加（双边）
+        total_volume      += notional
+        total_fees        += fee
+        coin_volume[coin] += notional
+        coin_fees[coin]   += fee
+        total_pnl         += pnl
 
-    # 按成交量排序 Top 5
     top_coins = sorted(coin_volume.items(), key=lambda x: x[1], reverse=True)[:5]
-
     fee_rate = (total_fees / total_volume * 100) if total_volume > 0 else 0
 
     return {
@@ -116,35 +115,32 @@ def analyze_time_window(cleaned_fills, days_ago):
     trades_count, win_count, loss_count = 0, 0, 0
     gross_profit, gross_loss, total_fees = 0.0, 0.0, 0.0
     total_roi        = 0.0
-    total_volume     = 0.0  # ★ 新增：窗口内名义成交量
+    total_volume     = 0.0  
 
     long_trades, long_wins   = 0, 0
     short_trades, short_wins = 0, 0
 
     max_single_win, max_single_loss = 0.0, 0.0
 
-    # 连胜/连败
     current_loss_streak, max_loss_streak = 0, 0
     current_win_streak,  max_win_streak  = 0, 0
 
     last_open_time        = {}
-    last_open_sz          = {}   # ★ 新增：记录开仓仓位大小（马丁格尔检测用）
+    last_open_sz          = {}   
     total_hold_time_win_ms  = 0
     total_hold_time_loss_ms = 0
 
-    # ★ 新增数据容器
-    close_sizes          = []          # 所有平仓的仓位大小（用于变异系数）
-    notional_values      = []          # 所有平仓的名义价值
-    large_loss_events    = 0           # 超额亏损事件计数（单笔亏损 > 均亏2倍，事后计算）
-    night_trades         = 0           # 深夜交易（UTC 0-6点）计数
+    close_sizes          = []          
+    notional_values      = []          
+    large_loss_events    = 0           
+    night_trades         = 0           
     coin_stats           = defaultdict(lambda: {"trades": 0, "wins": 0, "volume": 0.0, "pnl": 0.0})
 
-    # 马丁格尔检测：连亏后仓位是否变大
     martingale_signals   = 0
     last_was_loss        = False
     last_close_sz        = 0.0
 
-    pnl_series           = []          # ★ 新增：每笔盈亏，用于夏普类计算
+    pnl_series           = []          
 
     for fill in cleaned_fills:
         fill_time = fill.get('time', 0)
@@ -158,27 +154,29 @@ def analyze_time_window(cleaned_fills, days_ago):
         px       = float(fill.get('px', 0))
         notional = sz * px
 
-        # ★ 深夜交易检测（UTC 0-6）
         utc_hour = (fill_time // 1000 // 3600) % 24
         if 0 <= utc_hour < 6:
             night_trades += 1
 
-        # 开仓记录
+        # ✅ 【修正 1】确保全局双边数据（开仓+平仓）全部在此累加
+        total_volume += notional
+        total_fees   += fee
+        coin_stats[coin]["volume"] += notional  # 移出平仓逻辑块，真实记录单个币种的开+平成交量
+
+        # 开仓记录 (pnl == 0 代表开仓或加仓)
         if pnl == 0:
             if coin not in last_open_time:
                 last_open_time[coin] = fill_time
                 last_open_sz[coin]   = sz
 
-        # 平仓结算
+        # 平仓结算 (pnl != 0 代表产生了盈亏结算)
         if pnl != 0:
             trades_count += 1
-            total_fees   += fee
-            total_volume += notional
             close_sizes.append(sz)
             notional_values.append(notional)
             pnl_series.append(pnl)
+
             coin_stats[coin]["trades"] += 1
-            coin_stats[coin]["volume"] += notional
             coin_stats[coin]["pnl"]    += pnl
 
             roi = (pnl / notional * 100) if notional > 0 else 0
@@ -203,7 +201,6 @@ def analyze_time_window(cleaned_fills, days_ago):
                 max_win_streak       = max(max_win_streak, current_win_streak)
                 current_loss_streak  = 0
                 if coin in last_open_time: total_hold_time_win_ms += hold_duration
-                # ★ 马丁格尔检测：盈利后重置状态
                 last_was_loss  = False
                 last_close_sz  = sz
             else:
@@ -215,7 +212,6 @@ def analyze_time_window(cleaned_fills, days_ago):
                 max_loss_streak      = max(max_loss_streak, current_loss_streak)
                 current_win_streak   = 0
                 if coin in last_open_time: total_hold_time_loss_ms += hold_duration
-                # ★ 马丁格尔检测：连亏后下一笔仓位明显放大 (>1.5x)
                 if last_was_loss and last_close_sz > 0 and sz > last_close_sz * 1.5:
                     martingale_signals += 1
                 last_was_loss = True
@@ -227,7 +223,6 @@ def analyze_time_window(cleaned_fills, days_ago):
     if trades_count == 0:
         return {"days": days_ago, "trades": 0}
 
-    # ─── 二次计算衍生指标 ───
     win_rate       = win_count  / trades_count * 100
     avg_win        = gross_profit / win_count    if win_count  > 0 else 0
     avg_loss       = gross_loss   / loss_count   if loss_count > 0 else 0
@@ -241,51 +236,36 @@ def analyze_time_window(cleaned_fills, days_ago):
     avg_hold_loss_h  = (total_hold_time_loss_ms / loss_count / 1000 / 3600) if loss_count > 0 else 0
     avg_hold_total_h = ((total_hold_time_win_ms + total_hold_time_loss_ms) / trades_count / 1000 / 3600)
 
-    # ★ 成交量与手续费
-    avg_notional     = total_volume / trades_count
-    fee_drag         = (total_fees / gross_profit * 100) if gross_profit > 0 else 999  # 手续费侵蚀率
+    # ✅ 【修正 2】均仓位价值：由于 total_volume 是双边，计算单边平均仓位需除以 (trades_count * 2)
+    avg_notional     = (total_volume / 2) / trades_count if trades_count > 0 else 0
+    fee_drag         = (total_fees / gross_profit * 100) if gross_profit > 0 else 999  
 
-    # ★ 仓位变异系数（Coefficient of Variation）= std / mean
-    import statistics
     sz_mean = statistics.mean(close_sizes)  if close_sizes else 0
     sz_std  = statistics.stdev(close_sizes) if len(close_sizes) > 1 else 0
-    pos_cv  = (sz_std / sz_mean) if sz_mean > 0 else 0  # >1 视为高度不一致
+    pos_cv  = (sz_std / sz_mean) if sz_mean > 0 else 0  
 
-    # ★ 超额亏损事件（单笔亏损 > 平均亏损的2倍）
     if avg_loss > 0:
         large_loss_events = sum(1 for p in pnl_series if p < 0 and abs(p) > avg_loss * 2)
 
-    # ★ 深夜交易占比
     night_ratio = night_trades / trades_count * 100
-
-    # ★ 回撤恢复因子
     recovery_factor = net_pnl / max_single_loss if max_single_loss > 0 else 999
-
-    # ★ 期望值（数学期望：胜率×均赢 - 败率×均亏）
     expect_value = (win_rate / 100 * avg_win) - ((1 - win_rate / 100) * avg_loss)
 
-    # ★ 币种集中度：Top3币的成交量占总成交量比例
     top3_coins = sorted(coin_stats.items(), key=lambda x: x[1]["volume"], reverse=True)[:3]
     top3_volume = sum(c[1]["volume"] for c in top3_coins)
     concentration_ratio = (top3_volume / total_volume * 100) if total_volume > 0 else 0
 
-    # ═══════════════════════════════════════════════════════
-    # ★ 反向跟单模拟盈亏（假设 1:1 完全镜像跟单，相同仓位大小）
-    #   - 目标亏损笔 → 我盈利；目标盈利笔 → 我亏损
-    #   - 我需额外支付自己的开+平仓手续费（开仓+平仓共 2× 名义量 × MY_TAKER_FEE_RATE）
-    #   - 注意：实际跟单存在滑点/延迟，结果偏乐观，仅供参考
-    # ═══════════════════════════════════════════════════════
-    reverse_gross_profit = gross_loss    # 他亏 = 我赢
-    reverse_gross_loss   = gross_profit  # 他赢 = 我亏
-    my_fees              = total_volume * 2 * (MY_TAKER_FEE_RATE / 100)  # 开+平各一次
+    # 反向跟单模拟
+    reverse_gross_profit = gross_loss    
+    reverse_gross_loss   = gross_profit  
+    my_fees              = total_volume * (MY_TAKER_FEE_RATE / 100) 
     reverse_net_pnl      = reverse_gross_profit - reverse_gross_loss - my_fees
-    reverse_win_rate     = (loss_count / trades_count * 100)  # 他的败率 = 我的胜率
-    reverse_avg_win      = avg_loss                           # 他的均亏 = 我的均赢
-    reverse_avg_loss     = avg_win                            # 他的均赢 = 我的均亏
+    reverse_win_rate     = (loss_count / trades_count * 100)  
+    reverse_avg_win      = avg_loss                           
+    reverse_avg_loss     = avg_win                            
     reverse_pnl_ratio    = (reverse_avg_win / reverse_avg_loss) if reverse_avg_loss > 0 else 999
     raw_edge             = reverse_gross_profit - reverse_gross_loss
-    breakeven_fee_rate   = (raw_edge / (total_volume * 2) * 100) if total_volume > 0 else 0
-    # ═══════════════════════════════════════════════════════
+    breakeven_fee_rate   = (raw_edge / total_volume * 100) if total_volume > 0 else 0  
 
     return {
         "days": days_ago, "trades": trades_count, "win_rate": win_rate,
@@ -300,7 +280,6 @@ def analyze_time_window(cleaned_fills, days_ago):
         "avg_hold_total_h": avg_hold_total_h,
         "avg_hold_win_h":   avg_hold_win_h,
         "avg_hold_loss_h":  avg_hold_loss_h,
-        # ★ 新增字段
         "total_volume":       total_volume,
         "avg_notional":       avg_notional,
         "fee_drag":           fee_drag,
@@ -312,7 +291,6 @@ def analyze_time_window(cleaned_fills, days_ago):
         "expect_value":        expect_value,
         "concentration_ratio": concentration_ratio,
         "top3_coins":          top3_coins,
-        # ★ 反向跟单模拟
         "reverse_net_pnl":     reverse_net_pnl,
         "reverse_win_rate":    reverse_win_rate,
         "reverse_avg_win":     reverse_avg_win,
@@ -339,9 +317,8 @@ def print_report(wallet, raw_fills):
 
     if not cleaned_fills: return
 
-    # ─── 全局成交量面板（不受时间窗口限制）───
     gvs = compute_global_volume_stats(cleaned_fills)
-    print(f"\n 💰 【全历史成交量 & 手续费总览】")
+    print(f"\n 💰 【全历史成交量 & 手续费总览 (含开仓与平仓双边)】")
     print(f"  ➤ 总名义成交量  : ${gvs['total_volume']:>14,.2f}")
     print(f"  ➤ 累计手续费    : ${gvs['total_fees']:>14,.2f}  (综合费率 {gvs['fee_rate']:.4f}%/笔)")
     print(f"  ➤ 累计已实现PnL : ${gvs['total_pnl']:>14,.2f}")
@@ -361,15 +338,13 @@ def print_report(wallet, raw_fills):
 
         print(f"\n📅 【近 {days} 天 数据切片】")
 
-        # ── ① 成交量与费用 ──
         print(f"\n 💹 成交量 & 费用:")
-        print(f"  ➤ 区间名义成交量: ${stats['total_volume']:>12,.2f}  "
-              f"(均仓位价值 ${stats['avg_notional']:,.2f})")
+        print(f"  ➤ 区间双边成交量: ${stats['total_volume']:>12,.2f}  "
+              f"(单边均仓位价值 ${stats['avg_notional']:,.2f})")
         print(f"  ➤ 区间手续费    : ${stats['fees']:>12,.2f}  "
               f"(手续费侵蚀率: {stats['fee_drag']:.1f}% of 毛利润)"
               + ("  ⚠️ 严重侵蚀" if stats['fee_drag'] > 50 else ""))
 
-        # ── ② 基础交易数据 ──
         print(f"\n 📊 基础交易数据:")
         print(f"  ➤ 真实平仓频次: {stats['trades']} 笔 (约 {stats['freq']:.1f} 笔/天)")
         print(f"  ➤ 净 盈 亏    : ${stats['net_pnl']:.2f}")
@@ -377,7 +352,6 @@ def print_report(wallet, raw_fills):
         ev_tag = "🔴 负期望，长期必亏" if stats['expect_value'] < 0 else "🟢 正期望"
         print(f"  ➤ 单笔数学期望: ${stats['expect_value']:.2f}  [{ev_tag}]")
 
-        # ── ③ 胜负与多空 ──
         print(f"\n ⚖️  真实胜负与多空特征:")
         print(f"  ➤ 整体胜率    : {stats['win_rate']:.1f}%  "
               f"(多头 {stats['long_wr']:.1f}% | 空头 {stats['short_wr']:.1f}%)")
@@ -387,7 +361,6 @@ def print_report(wallet, raw_fills):
               + ("(🩸 超级血包)" if stats['profit_factor'] < 0.6 else "(✅ 正常)"))
         print(f"  ➤ 连胜 / 连败 : 最多 {stats['max_win_streak']} 连胜  /  最多 {stats['max_loss_streak']} 连败")
 
-        # ── ④ 韭菜心理学 ──
         print(f"\n 🧠 韭菜心理学画像:")
         print(f"  ➤ 单笔最大亏损: -${stats['max_loss']:.2f}  |  单笔最大盈利: +${stats['max_win']:.2f}")
         rf_tag = "⚠️ 极低，亏损未能覆盖" if stats['recovery_factor'] < 1 else "✅ 尚可"
@@ -397,9 +370,7 @@ def print_report(wallet, raw_fills):
         hold_tag = "⚠️ 极其畸形 (死扛亏损)" if stats['avg_hold_loss_h'] > (stats['avg_hold_win_h'] * 2 + 1) else "正常"
         print(f"  ➤ 盈利/亏损持仓: {stats['avg_hold_win_h']:.1f}h / {stats['avg_hold_loss_h']:.1f}h  [{hold_tag}]")
 
-        # ── ⑤ 新增深度行为指标 ──
         print(f"\n 🔬 深度行为指标 (新):")
-
         cv_tag = "🚨 极度情绪化，仓位毫无纪律" if stats['pos_cv'] > 1.5 \
             else ("⚠️ 仓位波动较大" if stats['pos_cv'] > 0.8 else "✅ 仓位较稳定")
         print(f"  ➤ 仓位规模变异系数: {stats['pos_cv']:.2f}  [{cv_tag}]")
@@ -419,12 +390,11 @@ def print_report(wallet, raw_fills):
             cwr = (cdata['wins'] / cdata['trades'] * 100) if cdata['trades'] > 0 else 0
             print(f"     {rank}. {coin:<8} {cdata['trades']} 笔  胜率 {cwr:.0f}%  PnL ${cdata['pnl']:.2f}")
 
-        # ── ⑥ 反向跟单模拟盈亏 ──
-        r = stats  # 简写
+        r = stats
         print(f"\n 🔄 反向跟单模拟盈亏 (假设 1:1 镜像跟单，手续费率 {MY_TAKER_FEE_RATE}%):")
         print(f"  ➤ 扣费前毛利润  : ${r['raw_edge']:>10,.2f}  "
               f"(吃到他的亏损 ${r['reverse_gross_profit']:,.2f} - 跟输他的盈利 ${r['reverse_gross_loss']:,.2f})")
-        print(f"  ➤ 我方手续费    : -${r['my_fees']:>9,.2f}  (开+平 × {r['total_volume']:,.0f} 名义量 × {MY_TAKER_FEE_RATE*2:.3f}%)")
+        print(f"  ➤ 我方手续费    : -${r['my_fees']:>9,.2f}  (双边成交量 ${r['total_volume']:,.0f} × {MY_TAKER_FEE_RATE:.3f}%)")
 
         net_tag = "✅ 正收益！值得跟" if r['reverse_net_pnl'] > 0 else "❌ 负收益，手续费吃掉优势"
         print(f"  ➤ 反向跟单净盈亏: ${r['reverse_net_pnl']:>10,.2f}  [{net_tag}]")
@@ -438,7 +408,6 @@ def print_report(wallet, raw_fills):
         else:
             print(f"  ➤ 盈亏平衡费率  : N/A（毛利润本身已为负，反向跟单无意义）")
 
-        # ── ⑦ AI 综合诊断 ──
         print(f"\n 🤖 AI 最终诊断结论 (含反向跟单可行性):")
         leek_score = 0
         diagnoses  = []
@@ -474,7 +443,7 @@ def print_report(wallet, raw_fills):
             diagnoses.append(f"  [反向跟单可行✅] 扣除手续费后，本周期反向跟单净盈利 ${stats['reverse_net_pnl']:.2f}，数据验证有效！")
             leek_score += 2
         elif stats['raw_edge'] > 0:
-            diagnoses.append(f"  [反向跟单受阻⚠️] 毛利润为正(${stats['raw_edge']:.2f})但手续费(${stats['my_fees']:.2f})吃掉收益，需降低费率或选更频繁的亏损期。")
+            diagnoses.append(f"  [反向跟单受阻⚠️] 毛利润为正(${stats['raw_edge']:.2f})但手续费吃掉收益，需降低费率或选更频繁的亏损期。")
 
         if diagnoses:
             for d in diagnoses:
