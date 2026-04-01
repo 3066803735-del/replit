@@ -7,6 +7,7 @@
  */
 import type { CoinStat } from "./coinStat";
 import type { PnlPoint } from "./pnlPoint";
+import type { PositionPoint } from "./positionPoint";
 
 export interface WindowStats {
   days: number;
@@ -52,4 +53,7 @@ export interface WindowStats {
   diagnoses?: string[];
   conclusion?: string;
   pnlSeries?: PnlPoint[];
+  positionSeries?: PositionPoint[];
+  maxPosition?: number;
+  avgPosition?: number;
 }

@@ -127,6 +127,17 @@ export const AnalyzeWalletsResponse = zod.object({
                 }),
               )
               .optional(),
+            positionSeries: zod
+              .array(
+                zod.object({
+                  time: zod.number(),
+                  notional: zod.number(),
+                  win: zod.boolean(),
+                }),
+              )
+              .optional(),
+            maxPosition: zod.number().optional(),
+            avgPosition: zod.number().optional(),
           }),
         )
         .optional(),

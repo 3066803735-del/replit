@@ -259,6 +259,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PnlPoint"
+        positionSeries:
+          type: array
+          items:
+            $ref: "#/components/schemas/PositionPoint"
+        maxPosition:
+          type: number
+        avgPosition:
+          type: number
       required:
         - days
         - trades
@@ -299,6 +307,20 @@ components:
         - time
         - pnl
         - cumulative
+
+    PositionPoint:
+      type: object
+      properties:
+        time:
+          type: number
+        notional:
+          type: number
+        win:
+          type: boolean
+      required:
+        - time
+        - notional
+        - win
 
     ErrorResponse:
       type: object

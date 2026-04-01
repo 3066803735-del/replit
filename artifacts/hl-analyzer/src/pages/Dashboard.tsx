@@ -16,6 +16,7 @@ const formSchema = z.object({
   timeWindows: z.string().regex(/^(\d+\s*,\s*)*\d+$/, "请输入逗号分隔的天数，例如 3,7,30"),
   mergeMinutes: z.coerce.number().min(0).max(60),
   myFeeRate: z.coerce.number().min(0).max(1),
+  myMaxPosition: z.coerce.number().min(0),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -31,8 +32,11 @@ export function Dashboard() {
       timeWindows: "3, 7, 30",
       mergeMinutes: 2.0,
       myFeeRate: 0.035,
+      myMaxPosition: 0,
     },
   });
+
+  const myMaxPosition = form.watch("myMaxPosition");
 
   const onSubmit = (values: FormValues) => {
     const walletsList = values.wallets
@@ -133,6 +137,23 @@ export function Dashboard() {
                 />
               </div>
             </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-muted-foreground">
+                我能接受的最大仓位（USDC，0 = 不设定）
+              </label>
+              <Input
+                type="number"
+                step="100"
+                min="0"
+                {...form.register("myMaxPosition")}
+                placeholder="如：5000"
+                className="font-mono text-sm bg-background border-panel-border/50"
+              />
+              <p className="text-[10px] text-muted-foreground/60">
+                用于计算：我的最大仓 ÷ 目标最大仓，作为参考跟单比例
+              </p>
+            </div>
           </div>
 
           <Button
@@ -176,7 +197,7 @@ export function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
               >
-                <WalletDashboard result={result} />
+                <WalletDashboard result={result} myMaxPosition={Number(myMaxPosition) || 0} />
               </motion.div>
             ))}
           </div>

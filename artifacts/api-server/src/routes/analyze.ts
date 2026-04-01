@@ -144,6 +144,7 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
   const closeSizes: number[] = [];
   const pnlSeries: number[] = [];
   const pnlPoints: { time: number; pnl: number }[] = [];
+  const positionPoints: { time: number; notional: number; win: boolean }[] = [];
   const coinStats: Record<string, { trades: number; wins: number; volume: number; pnl: number }> = {};
   const lastOpenTime: Record<string, number> = {};
 
@@ -172,6 +173,7 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
       closeSizes.push(sz);
       pnlSeries.push(pnl);
       pnlPoints.push({ time: fillTime, pnl });
+      positionPoints.push({ time: fillTime, notional, win: pnl > 0 });
       if (!coinStats[coin]) coinStats[coin] = { trades: 0, wins: 0, volume: 0, pnl: 0 };
       coinStats[coin].trades++;
       coinStats[coin].volume += notional;
@@ -374,6 +376,9 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
         return { time: p.time, pnl: p.pnl, cumulative: cum };
       });
     })(),
+    positionSeries: positionPoints,
+    maxPosition: positionPoints.length > 0 ? Math.max(...positionPoints.map((p) => p.notional)) : 0,
+    avgPosition: positionPoints.length > 0 ? positionPoints.reduce((s, p) => s + p.notional, 0) / positionPoints.length : 0,
   };
 }
 

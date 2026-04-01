@@ -51,6 +51,12 @@ export interface PnlPoint {
   cumulative: number;
 }
 
+export interface PositionPoint {
+  time: number;
+  notional: number;
+  win: boolean;
+}
+
 export interface WindowStats {
   days: number;
   trades: number;
@@ -95,6 +101,9 @@ export interface WindowStats {
   diagnoses?: string[];
   conclusion?: string;
   pnlSeries?: PnlPoint[];
+  positionSeries?: PositionPoint[];
+  maxPosition?: number;
+  avgPosition?: number;
 }
 
 export interface WalletResult {
