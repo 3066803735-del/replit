@@ -251,8 +251,8 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
       winRate: data.trades > 0 ? (data.wins / data.trades) * 100 : 0,
     }));
 
-  const top3Volume = top3Coins.reduce((sum, c) => sum + c.volume, 0);
-  const concentrationRatio = totalVolume > 0 ? (top3Volume / totalVolume) * 100 : 0;
+  const top5Volume = top5Coins.reduce((sum, c) => sum + c.volume, 0);
+  const concentrationRatio = totalVolume > 0 ? (top5Volume / totalVolume) * 100 : 0;
 
   const reverseGrossProfit = grossLoss;
   const reverseGrossLoss = grossProfit;
