@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { Radar, Settings2, ShieldAlert, Trophy, Copy, Check } from "lucide-react";
+import { Radar, Settings2, ShieldAlert, Trophy, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import { useAnalyzeWallets } from "@workspace/api-client-react";
 import { WalletResult } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -44,6 +44,153 @@ function CopyButton({ text }: { text: string }) {
         ? <Check className="h-3 w-3 text-success" />
         : <Copy className="h-3 w-3" />}
     </button>
+  );
+}
+
+type RankedRow = { result: WalletResult; refProfit: number };
+
+function LeaderboardTable({ ranked, myMaxPos }: { ranked: RankedRow[]; myMaxPos: number }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggle = (wallet: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(wallet) ? next.delete(wallet) : next.add(wallet);
+      return next;
+    });
+
+  const fmtH = (h: number | undefined) => h !== undefined ? `${h.toFixed(1)}h` : "—";
+  const fmtN = (n: number | undefined, decimals = 2) => n !== undefined ? n.toFixed(decimals) : "—";
+  const fmtPct = (n: number | undefined) => n !== undefined ? `${n.toFixed(1)}%` : "—";
+
+  return (
+    <div className="rounded-xl border border-primary/30 bg-panel/40 overflow-hidden shadow-[0_0_20px_rgba(51,210,255,0.08)]">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-panel-border/60 bg-primary/5">
+        <Trophy className="h-4 w-4 text-primary" />
+        <span className="text-xs font-bold uppercase tracking-widest text-primary">
+          反向跟单参考净收益排行（{ranked[0]?.result.windowStats?.[0]?.days ?? "?"} 天窗口）
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs font-mono">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-panel-border/40">
+              <th className="text-left px-4 py-2 w-8">排名</th>
+              <th className="text-left px-4 py-2">钱包地址</th>
+              <th className="text-right px-4 py-2">跟单净盈亏</th>
+              <th className="text-right px-4 py-2">跟单比例</th>
+              <th className="text-right px-4 py-2 text-primary">参考净收益</th>
+              <th className="w-8 px-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {ranked.map(({ result, refProfit }, i) => {
+              const ws = result.windowStats?.[0];
+              const maxPos = ws?.maxPosition ?? 0;
+              const ratio = myMaxPos > 0 && maxPos > 0 ? myMaxPos / maxPos : 1;
+              const reverseNetPnl = ws?.reverseNetPnl ?? 0;
+              const isTop = i === 0;
+              const isOpen = expanded.has(result.wallet);
+
+              return (
+                <>
+                  <tr
+                    key={result.wallet}
+                    className={`border-t border-panel-border/30 transition-colors hover:bg-panel/30 ${isTop ? "bg-primary/5" : ""}`}
+                  >
+                    <td className="px-4 py-2.5 font-bold">
+                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">
+                      {result.error
+                        ? <span className="text-danger">❌ 获取失败</span>
+                        : <span className="inline-flex items-center gap-0 font-mono">
+                            <span>{result.wallet.slice(0, 10)}…{result.wallet.slice(-6)}</span>
+                            <CopyButton text={result.wallet} />
+                          </span>
+                      }
+                    </td>
+                    <td className={`px-4 py-2.5 text-right ${reverseNetPnl >= 0 ? "text-success" : "text-danger"}`}>
+                      {result.error ? "—" : fmt(reverseNetPnl)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-muted-foreground">
+                      {result.error ? "—" : ratio.toFixed(5)}
+                    </td>
+                    <td className={`px-4 py-2.5 text-right font-bold ${refProfit >= 0 ? "text-success" : "text-danger"} ${isTop && refProfit > 0 ? "text-glow-success" : ""}`}>
+                      {result.error ? "—" : fmt(refProfit)}
+                    </td>
+                    <td className="px-2 py-2.5 text-center">
+                      {!result.error && ws && (
+                        <button
+                          onClick={() => toggle(result.wallet)}
+                          className="p-1 rounded text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-all duration-150"
+                          title={isOpen ? "收起" : "展开详情"}
+                        >
+                          {isOpen
+                            ? <ChevronUp className="h-3.5 w-3.5" />
+                            : <ChevronDown className="h-3.5 w-3.5" />}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* 展开详情行 */}
+                  {isOpen && ws && (
+                    <tr key={result.wallet + "_detail"} className="border-t border-panel-border/20 bg-background/50">
+                      <td colSpan={6} className="px-5 py-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                          {/* 胜率 */}
+                          <div className="rounded-lg bg-panel/60 border border-panel-border/50 px-3 py-2 space-y-0.5">
+                            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">胜率</div>
+                            <div className={`font-bold text-sm ${(ws.winRate ?? 0) >= 50 ? "text-success" : "text-danger"}`}>
+                              {fmtPct(ws.winRate)}
+                            </div>
+                          </div>
+                          {/* 盈亏比 */}
+                          <div className="rounded-lg bg-panel/60 border border-panel-border/50 px-3 py-2 space-y-0.5">
+                            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">盈亏比</div>
+                            <div className={`font-bold text-sm ${(ws.pnlRatio ?? 0) >= 1 ? "text-success" : "text-danger"}`}>
+                              {fmtN(ws.pnlRatio)}
+                            </div>
+                          </div>
+                          {/* 总体平均持仓 */}
+                          <div className="rounded-lg bg-panel/60 border border-panel-border/50 px-3 py-2 space-y-0.5">
+                            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">均持仓</div>
+                            <div className="font-bold text-sm text-foreground">{fmtH(ws.avgHoldTotalH)}</div>
+                          </div>
+                          {/* 盈利单 / 亏损单持仓 */}
+                          <div className="rounded-lg bg-panel/60 border border-panel-border/50 px-3 py-2 space-y-0.5">
+                            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">盈利单 / 亏损单</div>
+                            <div className="font-bold text-sm">
+                              <span className="text-success">{fmtH(ws.avgHoldWinH)}</span>
+                              <span className="text-muted-foreground mx-1">/</span>
+                              <span className="text-danger">{fmtH(ws.avgHoldLossH)}</span>
+                            </div>
+                          </div>
+                          {/* 仓位变异系数 */}
+                          <div className="rounded-lg bg-panel/60 border border-panel-border/50 px-3 py-2 space-y-0.5">
+                            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">仓位变异系数</div>
+                            <div className={`font-bold text-sm ${(ws.posCv ?? 0) > 1.5 ? "text-danger" : (ws.posCv ?? 0) > 0.8 ? "text-warning" : "text-success"}`}>
+                              {fmtN(ws.posCv)}
+                            </div>
+                          </div>
+                          {/* 盈利因子 */}
+                          <div className="rounded-lg bg-panel/60 border border-panel-border/50 px-3 py-2 space-y-0.5">
+                            <div className="text-[9px] uppercase tracking-wider text-muted-foreground">盈利因子</div>
+                            <div className={`font-bold text-sm ${(ws.profitFactor ?? 0) >= 1 ? "text-success" : "text-danger"}`}>
+                              {ws.profitFactor === 999 ? "∞" : fmtN(ws.profitFactor)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -236,61 +383,7 @@ export function Dashboard() {
                 {/* ── 多钱包排行榜 ── */}
                 {ranked.length > 1 && (
                   <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-                    <div className="rounded-xl border border-primary/30 bg-panel/40 overflow-hidden shadow-[0_0_20px_rgba(51,210,255,0.08)]">
-                      <div className="flex items-center gap-2 px-5 py-3 border-b border-panel-border/60 bg-primary/5">
-                        <Trophy className="h-4 w-4 text-primary" />
-                        <span className="text-xs font-bold uppercase tracking-widest text-primary">
-                          反向跟单参考净收益排行（{ranked[0].result.windowStats?.[0]?.days ?? "?"} 天窗口）
-                        </span>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs font-mono">
-                          <thead>
-                            <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-panel-border/40">
-                              <th className="text-left px-4 py-2 w-8">排名</th>
-                              <th className="text-left px-4 py-2">钱包地址</th>
-                              <th className="text-right px-4 py-2">跟单净盈亏</th>
-                              <th className="text-right px-4 py-2">跟单比例</th>
-                              <th className="text-right px-4 py-2 text-primary">参考净收益</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ranked.map(({ result, refProfit }, i) => {
-                              const ws = result.windowStats?.[0];
-                              const maxPos = ws?.maxPosition ?? 0;
-                              const ratio = myMaxPos > 0 && maxPos > 0 ? myMaxPos / maxPos : 1;
-                              const reverseNetPnl = ws?.reverseNetPnl ?? 0;
-                              const isTop = i === 0;
-                              return (
-                                <tr key={result.wallet} className={`border-t border-panel-border/30 transition-colors hover:bg-panel/30 ${isTop ? "bg-primary/5" : ""}`}>
-                                  <td className="px-4 py-2.5 font-bold">
-                                    {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-muted-foreground">
-                                    {result.error
-                                      ? <span className="text-danger">❌ 获取失败</span>
-                                      : <span className="inline-flex items-center gap-0 font-mono">
-                                          <span>{result.wallet.slice(0, 10)}…{result.wallet.slice(-6)}</span>
-                                          <CopyButton text={result.wallet} />
-                                        </span>
-                                    }
-                                  </td>
-                                  <td className={`px-4 py-2.5 text-right ${reverseNetPnl >= 0 ? "text-success" : "text-danger"}`}>
-                                    {result.error ? "—" : fmt(reverseNetPnl)}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-right text-muted-foreground">
-                                    {result.error ? "—" : ratio.toFixed(5)}
-                                  </td>
-                                  <td className={`px-4 py-2.5 text-right font-bold ${refProfit >= 0 ? "text-success" : "text-danger"} ${isTop && refProfit > 0 ? "text-glow-success" : ""}`}>
-                                    {result.error ? "—" : fmt(refProfit)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+                    <LeaderboardTable ranked={ranked} myMaxPos={myMaxPos} />
                   </motion.div>
                 )}
 
