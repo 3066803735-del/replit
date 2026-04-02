@@ -2,14 +2,28 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { Radar, Settings2, ShieldAlert } from "lucide-react";
+import { Radar, Settings2, ShieldAlert, Trophy } from "lucide-react";
 
 import { useAnalyzeWallets } from "@workspace/api-client-react";
+import { WalletResult } from "@workspace/api-client-react/src/generated/api.schemas";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { WalletDashboard } from "@/components/WalletDashboard";
 import { useToast } from "@/hooks/use-toast";
+
+function computeRefProfit(result: WalletResult, myMaxPos: number): number {
+  if (result.error) return -Infinity;
+  const ws = result.windowStats?.[0];
+  if (!ws) return -Infinity;
+  const maxPos = ws.maxPosition ?? 0;
+  const followRatio = myMaxPos > 0 && maxPos > 0 ? myMaxPos / maxPos : 1;
+  return (ws.reverseNetPnl ?? 0) * followRatio;
+}
+
+function fmt(v: number) {
+  return (v >= 0 ? "+" : "") + "$" + Math.abs(v).toFixed(2);
+}
 
 const formSchema = z.object({
   wallets: z.string().min(1, "请输入至少一个钱包地址"),
@@ -189,18 +203,91 @@ export function Dashboard() {
             <div className="font-mono text-sm tracking-widest animate-pulse">正在抓取链上数据...</div>
           </div>
         ) : data?.results ? (
-          <div className="space-y-8 max-w-6xl mx-auto">
-            {data.results.map((result, idx) => (
-              <motion.div
-                key={result.wallet + idx}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-              >
-                <WalletDashboard result={result} myMaxPosition={Number(myMaxPosition) || 0} />
-              </motion.div>
-            ))}
-          </div>
+          (() => {
+            const myMaxPos = Number(myMaxPosition) || 0;
+            const ranked = [...data.results]
+              .map((r) => ({ result: r, refProfit: computeRefProfit(r, myMaxPos) }))
+              .sort((a, b) => b.refProfit - a.refProfit);
+
+            return (
+              <div className="space-y-8 max-w-6xl mx-auto">
+                {/* ── 多钱包排行榜 ── */}
+                {ranked.length > 1 && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+                    <div className="rounded-xl border border-primary/30 bg-panel/40 overflow-hidden shadow-[0_0_20px_rgba(51,210,255,0.08)]">
+                      <div className="flex items-center gap-2 px-5 py-3 border-b border-panel-border/60 bg-primary/5">
+                        <Trophy className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-primary">
+                          反向跟单参考净收益排行（{ranked[0].result.windowStats?.[0]?.days ?? "?"} 天窗口）
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs font-mono">
+                          <thead>
+                            <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-panel-border/40">
+                              <th className="text-left px-4 py-2 w-8">排名</th>
+                              <th className="text-left px-4 py-2">钱包地址</th>
+                              <th className="text-right px-4 py-2">跟单净盈亏</th>
+                              <th className="text-right px-4 py-2">跟单比例</th>
+                              <th className="text-right px-4 py-2 text-primary">参考净收益</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ranked.map(({ result, refProfit }, i) => {
+                              const ws = result.windowStats?.[0];
+                              const maxPos = ws?.maxPosition ?? 0;
+                              const ratio = myMaxPos > 0 && maxPos > 0 ? myMaxPos / maxPos : 1;
+                              const reverseNetPnl = ws?.reverseNetPnl ?? 0;
+                              const isTop = i === 0;
+                              return (
+                                <tr key={result.wallet} className={`border-t border-panel-border/30 transition-colors hover:bg-panel/30 ${isTop ? "bg-primary/5" : ""}`}>
+                                  <td className="px-4 py-2.5 font-bold">
+                                    {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-muted-foreground">
+                                    {result.error
+                                      ? <span className="text-danger">❌ 获取失败</span>
+                                      : <span className="font-mono">{result.wallet.slice(0, 10)}…{result.wallet.slice(-6)}</span>
+                                    }
+                                  </td>
+                                  <td className={`px-4 py-2.5 text-right ${reverseNetPnl >= 0 ? "text-success" : "text-danger"}`}>
+                                    {result.error ? "—" : fmt(reverseNetPnl)}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right text-muted-foreground">
+                                    {result.error ? "—" : ratio.toFixed(5)}
+                                  </td>
+                                  <td className={`px-4 py-2.5 text-right font-bold ${refProfit >= 0 ? "text-success" : "text-danger"} ${isTop && refProfit > 0 ? "text-glow-success" : ""}`}>
+                                    {result.error ? "—" : fmt(refProfit)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── 钱包详情卡片 ── */}
+                {ranked.map(({ result, refProfit }, idx) => (
+                  <motion.div
+                    key={result.wallet + idx}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.1 }}
+                  >
+                    <WalletDashboard
+                      result={result}
+                      myMaxPosition={myMaxPos}
+                      rank={ranked.length > 1 ? idx + 1 : undefined}
+                      defaultRefProfit={refProfit}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            );
+          })()
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground/50 space-y-4">
             <ShieldAlert className="h-16 w-16 opacity-20" />

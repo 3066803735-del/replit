@@ -17,6 +17,8 @@ import {
 interface WalletDashboardProps {
   result: WalletResult;
   myMaxPosition?: number;
+  rank?: number;
+  defaultRefProfit?: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,7 +56,7 @@ function PnlTooltip({ active, payload }: any) {
   );
 }
 
-export function WalletDashboard({ result, myMaxPosition = 0 }: WalletDashboardProps) {
+export function WalletDashboard({ result, myMaxPosition = 0, rank }: WalletDashboardProps) {
   const [activeTab, setActiveTab] = useState<number>(
     result.windowStats && result.windowStats.length > 0 ? result.windowStats[0].days : 0
   );
@@ -98,6 +100,9 @@ export function WalletDashboard({ result, myMaxPosition = 0 }: WalletDashboardPr
   const maxPosition = activeStats?.maxPosition ?? 0;
   const avgPosition = activeStats?.avgPosition ?? 0;
   const followRatio = myMaxPosition > 0 && maxPosition > 0 ? myMaxPosition / maxPosition : null;
+  const referenceNetProfit = followRatio !== null
+    ? (activeStats?.reverseNetPnl ?? 0) * followRatio
+    : (activeStats?.reverseNetPnl ?? 0);
 
   return (
     <Card className="overflow-hidden border-panel-border/80 shadow-2xl glass-panel">
@@ -105,6 +110,17 @@ export function WalletDashboard({ result, myMaxPosition = 0 }: WalletDashboardPr
       <div className="bg-panel/50 border-b border-panel-border p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
+            {rank !== undefined && (
+              <span className={cn(
+                "shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border",
+                rank === 1 ? "bg-yellow-500/20 border-yellow-500/50 text-yellow-400" :
+                rank === 2 ? "bg-slate-400/20 border-slate-400/50 text-slate-300" :
+                rank === 3 ? "bg-orange-700/20 border-orange-700/50 text-orange-400" :
+                "bg-panel border-panel-border text-muted-foreground"
+              )}>
+                {rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`}
+              </span>
+            )}
             <h2 className="text-xl font-mono font-bold tracking-tight text-foreground truncate max-w-[200px] sm:max-w-md">
               {result.wallet}
             </h2>
@@ -208,7 +224,7 @@ export function WalletDashboard({ result, myMaxPosition = 0 }: WalletDashboardPr
                   {/* ── 反向跟单模拟 ── */}
                   <div className="space-y-3">
                     <SectionTitle icon={<Zap className="h-4 w-4 text-primary" />} title="反向跟单模拟盈亏（1:1 镜像）" />
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                       <StatBox
                         label="扣费前毛利润"
                         value={<span className={getColorForValue(activeStats.rawEdge)}>{formatCurrency(activeStats.rawEdge)}</span>}
@@ -227,6 +243,23 @@ export function WalletDashboard({ result, myMaxPosition = 0 }: WalletDashboardPr
                               ? <><CheckCircle2 className="h-3 w-3 text-success" /> 策略可行，正收益</>
                               : <><Skull className="h-3 w-3 text-danger" /> 手续费吃掉优势</>}
                           </span>
+                        }
+                      />
+                      <StatBox
+                        label="参考净收益"
+                        highlight={referenceNetProfit > 0}
+                        value={
+                          <span className={cn(
+                            "font-bold text-lg",
+                            referenceNetProfit > 0 ? "text-success text-glow-success" : "text-danger"
+                          )}>
+                            {(referenceNetProfit >= 0 ? "+" : "") + formatCurrency(referenceNetProfit)}
+                          </span>
+                        }
+                        subtext={
+                          followRatio !== null
+                            ? `跟单净盈亏 × ${followRatio.toFixed(5)}`
+                            : "跟单净盈亏 × 1（未设定仓位上限）"
                         }
                       />
                       <StatBox
