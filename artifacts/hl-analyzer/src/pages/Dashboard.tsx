@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion } from "framer-motion";
-import { Radar, Settings2, ShieldAlert, Trophy } from "lucide-react";
+import { Radar, Settings2, ShieldAlert, Trophy, Copy, Check } from "lucide-react";
 
 import { useAnalyzeWallets } from "@workspace/api-client-react";
 import { WalletResult } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -23,6 +24,27 @@ function computeRefProfit(result: WalletResult, myMaxPos: number): number {
 
 function fmt(v: number) {
   return (v >= 0 ? "+" : "") + "$" + Math.abs(v).toFixed(2);
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      title="复制钱包地址"
+      className="ml-1.5 p-0.5 rounded text-muted-foreground/50 hover:text-primary hover:bg-primary/10 transition-all duration-150 shrink-0"
+    >
+      {copied
+        ? <Check className="h-3 w-3 text-success" />
+        : <Copy className="h-3 w-3" />}
+    </button>
+  );
 }
 
 const formSchema = z.object({
@@ -247,7 +269,10 @@ export function Dashboard() {
                                   <td className="px-4 py-2.5 text-muted-foreground">
                                     {result.error
                                       ? <span className="text-danger">❌ 获取失败</span>
-                                      : <span className="font-mono">{result.wallet.slice(0, 10)}…{result.wallet.slice(-6)}</span>
+                                      : <span className="inline-flex items-center gap-0 font-mono">
+                                          <span>{result.wallet.slice(0, 10)}…{result.wallet.slice(-6)}</span>
+                                          <CopyButton text={result.wallet} />
+                                        </span>
                                     }
                                   </td>
                                   <td className={`px-4 py-2.5 text-right ${reverseNetPnl >= 0 ? "text-success" : "text-danger"}`}>
