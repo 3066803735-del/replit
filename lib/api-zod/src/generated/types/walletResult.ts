@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GlobalStats } from "./globalStats";
+import type { TransferStats } from "./transferStats";
 import type { WindowStats } from "./windowStats";
 
 export interface WalletResult {
@@ -16,4 +17,5 @@ export interface WalletResult {
   waterRatio?: number;
   globalStats?: GlobalStats;
   windowStats?: WindowStats[];
+  transferStats?: TransferStats;
 }

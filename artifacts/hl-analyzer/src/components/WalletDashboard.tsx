@@ -11,7 +11,7 @@ import { StatBox } from "@/components/StatBox";
 import { formatCurrency, formatPercent, formatCompact, getColorForValue, cn } from "@/lib/utils";
 import {
   Activity, AlertTriangle, CheckCircle2, Skull, Target, Zap,
-  Droplets, BarChart2, TrendingUp,
+  Droplets, BarChart2, TrendingUp, ArrowDownCircle, ArrowUpCircle, Wallet,
 } from "lucide-react";
 
 interface WalletDashboardProps {
@@ -419,8 +419,8 @@ export function WalletDashboard({ result, myMaxPosition = 0 }: WalletDashboardPr
                       />
                     </div>
 
-                    {/* Top3 币种明细表 */}
-                    {activeStats.top3Coins && activeStats.top3Coins.length > 0 && (
+                    {/* Top5 币种明细表 */}
+                    {activeStats.top5Coins && activeStats.top5Coins.length > 0 && (
                       <div className="rounded-lg border border-panel-border overflow-hidden">
                         <div className="bg-panel/40 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex">
                           <span className="w-24">币种</span>
@@ -429,7 +429,7 @@ export function WalletDashboard({ result, myMaxPosition = 0 }: WalletDashboardPr
                           <span className="flex-1 text-right">成交量</span>
                           <span className="flex-1 text-right">盈亏</span>
                         </div>
-                        {activeStats.top3Coins.map((c) => (
+                        {activeStats.top5Coins.map((c) => (
                           <div key={c.coin} className="px-4 py-2 text-xs font-mono flex items-center border-t border-panel-border/50 hover:bg-panel/20 transition-colors">
                             <span className="w-24 text-primary font-bold">{c.coin}</span>
                             <span className="w-16 text-right text-muted-foreground">{c.trades}</span>
@@ -470,15 +470,15 @@ export function WalletDashboard({ result, myMaxPosition = 0 }: WalletDashboardPr
                               highlight
                               value={
                                 <span className={followRatio >= 1 ? "text-success font-bold" : followRatio >= 0.5 ? "text-warning font-bold" : "text-danger font-bold"}>
-                                  {(followRatio * 100).toFixed(1)}%
+                                  {followRatio.toFixed(5)}
                                 </span>
                               }
                               subtext={
                                 followRatio >= 1
                                   ? "✅ 可 1:1 全额跟单"
                                   : followRatio >= 0.5
-                                  ? `⚠️ 建议缩小至 ${(followRatio * 100).toFixed(0)}%`
-                                  : `🔴 仓位差距大，仅跟 ${(followRatio * 100).toFixed(0)}%`
+                                  ? `⚠️ 建议适当缩仓跟单`
+                                  : `🔴 仓位差距大，谨慎跟单`
                               }
                             />
                           </>
@@ -633,6 +633,112 @@ export function WalletDashboard({ result, myMaxPosition = 0 }: WalletDashboardPr
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* ── 充值提现分析报告（全历史，不随 tab 变化）── */}
+            {result.transferStats && (result.transferStats.depositCount > 0 || result.transferStats.withdrawCount > 0) && (
+              <div className="space-y-3 border-t border-panel-border pt-6">
+                <SectionTitle icon={<Wallet className="h-4 w-4 text-muted-foreground" />} title="账户充值提现历史分析" />
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <StatBox
+                    label="历史充值总额"
+                    value={
+                      <span className="flex items-center gap-1 text-success">
+                        <ArrowDownCircle className="h-3.5 w-3.5" />
+                        {formatCurrency(result.transferStats.totalDeposited)}
+                      </span>
+                    }
+                    subtext={`共 ${result.transferStats.depositCount} 次充值`}
+                  />
+                  <StatBox
+                    label="历史提现总额"
+                    value={
+                      <span className="flex items-center gap-1 text-warning">
+                        <ArrowUpCircle className="h-3.5 w-3.5" />
+                        {formatCurrency(result.transferStats.totalWithdrawn)}
+                      </span>
+                    }
+                    subtext={`共 ${result.transferStats.withdrawCount} 次提现`}
+                  />
+                  <StatBox
+                    label="净资金流入"
+                    value={
+                      <span className={getColorForValue(result.transferStats.netFlow)}>
+                        {formatCurrency(result.transferStats.netFlow)}
+                      </span>
+                    }
+                    subtext="充值 − 提现"
+                  />
+                  <StatBox
+                    label="提现率（已套现）"
+                    highlight={result.transferStats.cashoutRatio > 0.5}
+                    value={
+                      <span className={result.transferStats.cashoutRatio >= 0.8 ? "text-success font-bold" : result.transferStats.cashoutRatio >= 0.3 ? "text-warning" : "text-danger"}>
+                        {(result.transferStats.cashoutRatio * 100).toFixed(1)}%
+                      </span>
+                    }
+                    subtext={
+                      result.transferStats.cashoutRatio >= 0.8 ? "✅ 大部分已套现离场" :
+                      result.transferStats.cashoutRatio >= 0.3 ? "⚠️ 部分套现" :
+                      "🔴 几乎没有提现，资金深套"
+                    }
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <StatBox
+                    label="平均每次充值"
+                    value={<span className="text-foreground">{formatCurrency(result.transferStats.avgDeposit)}</span>}
+                    subtext={`最大单次 ${formatCurrency(result.transferStats.maxDeposit)}`}
+                  />
+                  <StatBox
+                    label="平均每次提现"
+                    value={<span className="text-foreground">{formatCurrency(result.transferStats.avgWithdraw)}</span>}
+                    subtext={`最大单次 ${formatCurrency(result.transferStats.maxWithdraw)}`}
+                  />
+                  {result.transferStats.depositCount > 0 && (
+                    <StatBox
+                      label="首次充值 / 最近充值"
+                      value={
+                        <div className="text-xs font-mono space-y-0.5">
+                          <div className="text-muted-foreground">
+                            {new Date(result.transferStats.firstDepositTime).toLocaleDateString("zh-CN")}
+                          </div>
+                          <div>
+                            {new Date(result.transferStats.lastDepositTime).toLocaleDateString("zh-CN")}
+                          </div>
+                        </div>
+                      }
+                    />
+                  )}
+                  {result.transferStats.lossConsumptionRate > 0 && (
+                    <StatBox
+                      label="亏损消耗本金比率"
+                      highlight
+                      value={
+                        <span className={result.transferStats.lossConsumptionRate > 0.5 ? "text-danger font-bold text-glow-danger" : "text-warning font-bold"}>
+                          {(result.transferStats.lossConsumptionRate * 100).toFixed(1)}%
+                        </span>
+                      }
+                      subtext={
+                        result.transferStats.lossConsumptionRate > 0.5
+                          ? "🩸 超半数本金已亏损"
+                          : "⚠️ 已亏损部分本金"
+                      }
+                    />
+                  )}
+                </div>
+
+                {/* 最近提现时间 */}
+                {result.transferStats.withdrawCount > 0 && (
+                  <div className="text-[10px] text-muted-foreground/60 font-mono px-1">
+                    最近提现：{new Date(result.transferStats.lastWithdrawTime).toLocaleDateString("zh-CN")} ·
+                    首次提现：{new Date(result.transferStats.firstWithdrawTime).toLocaleDateString("zh-CN")}
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         )}
       </CardContent>

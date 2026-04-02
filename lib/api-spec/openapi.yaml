@@ -119,6 +119,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WindowStats"
+        transferStats:
+          $ref: "#/components/schemas/TransferStats"
       required:
         - wallet
 
@@ -227,7 +229,7 @@ components:
           type: number
         concentrationRatio:
           type: number
-        top3Coins:
+        top5Coins:
           type: array
           items:
             $ref: "#/components/schemas/CoinStat"
@@ -321,6 +323,46 @@ components:
         - time
         - notional
         - win
+
+    TransferStats:
+      type: object
+      properties:
+        depositCount:
+          type: integer
+        withdrawCount:
+          type: integer
+        totalDeposited:
+          type: number
+        totalWithdrawn:
+          type: number
+        netFlow:
+          type: number
+        avgDeposit:
+          type: number
+        avgWithdraw:
+          type: number
+        maxDeposit:
+          type: number
+        maxWithdraw:
+          type: number
+        cashoutRatio:
+          type: number
+        firstDepositTime:
+          type: number
+        lastDepositTime:
+          type: number
+        firstWithdrawTime:
+          type: number
+        lastWithdrawTime:
+          type: number
+        lossConsumptionRate:
+          type: number
+      required:
+        - depositCount
+        - withdrawCount
+        - totalDeposited
+        - totalWithdrawn
+        - netFlow
 
     ErrorResponse:
       type: object

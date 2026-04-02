@@ -95,7 +95,7 @@ export const AnalyzeWalletsResponse = zod.object({
             recoveryFactor: zod.number().optional(),
             expectValue: zod.number().optional(),
             concentrationRatio: zod.number().optional(),
-            top3Coins: zod
+            top5Coins: zod
               .array(
                 zod.object({
                   coin: zod.string(),
@@ -140,6 +140,25 @@ export const AnalyzeWalletsResponse = zod.object({
             avgPosition: zod.number().optional(),
           }),
         )
+        .optional(),
+      transferStats: zod
+        .object({
+          depositCount: zod.number(),
+          withdrawCount: zod.number(),
+          totalDeposited: zod.number(),
+          totalWithdrawn: zod.number(),
+          netFlow: zod.number(),
+          avgDeposit: zod.number().optional(),
+          avgWithdraw: zod.number().optional(),
+          maxDeposit: zod.number().optional(),
+          maxWithdraw: zod.number().optional(),
+          cashoutRatio: zod.number().optional(),
+          firstDepositTime: zod.number().optional(),
+          lastDepositTime: zod.number().optional(),
+          firstWithdrawTime: zod.number().optional(),
+          lastWithdrawTime: zod.number().optional(),
+          lossConsumptionRate: zod.number().optional(),
+        })
         .optional(),
     }),
   ),

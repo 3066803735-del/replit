@@ -40,7 +40,7 @@ export interface WindowStats {
   recoveryFactor?: number;
   expectValue?: number;
   concentrationRatio?: number;
-  top3Coins?: CoinStat[];
+  top5Coins?: CoinStat[];
   reverseNetPnl?: number;
   reverseWinRate?: number;
   reverseAvgWin?: number;

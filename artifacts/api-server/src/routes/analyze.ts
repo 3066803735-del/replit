@@ -239,9 +239,9 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
   const recoveryFactor = maxSingleLoss > 0 ? netPnl / maxSingleLoss : 999;
   const expectValue = (winRate / 100) * avgWin - ((1 - winRate / 100) * avgLoss);
 
-  const top3Coins = Object.entries(coinStats)
+  const top5Coins = Object.entries(coinStats)
     .sort((a, b) => b[1].volume - a[1].volume)
-    .slice(0, 3)
+    .slice(0, 5)
     .map(([coin, data]) => ({
       coin,
       trades: data.trades,
@@ -357,7 +357,7 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
     recoveryFactor,
     expectValue,
     concentrationRatio,
-    top3Coins,
+    top5Coins,
     reverseNetPnl,
     reverseWinRate,
     reverseAvgWin,
@@ -379,6 +379,70 @@ function analyzeWindow(fills: Fill[], daysAgo: number, myFeeRate: number) {
     positionSeries: positionPoints,
     maxPosition: positionPoints.length > 0 ? Math.max(...positionPoints.map((p) => p.notional)) : 0,
     avgPosition: positionPoints.length > 0 ? positionPoints.reduce((s, p) => s + p.notional, 0) / positionPoints.length : 0,
+  };
+}
+
+interface RawTransferEntry {
+  time?: number;
+  hash?: string;
+  delta?: {
+    type?: string;
+    usdc?: string | number;
+    amount?: string | number;
+  };
+}
+
+async function fetchUserTransfers(wallet: string): Promise<RawTransferEntry[]> {
+  const res = await fetch("https://api.hyperliquid.xyz/info", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "userNonFundingLedgerUpdates", user: wallet }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<RawTransferEntry[]>;
+}
+
+function analyzeTransfers(entries: RawTransferEntry[], netPnl: number) {
+  const deposits: { time: number; amount: number }[] = [];
+  const withdrawals: { time: number; amount: number }[] = [];
+
+  for (const e of entries) {
+    const t = e.time ?? 0;
+    const kind = e.delta?.type ?? "";
+    const usdc = parseFloat(String(e.delta?.usdc ?? e.delta?.amount ?? 0));
+    if (isNaN(usdc) || usdc <= 0) continue;
+    if (kind === "deposit") deposits.push({ time: t, amount: usdc });
+    else if (kind === "withdraw") withdrawals.push({ time: t, amount: usdc });
+  }
+
+  const totalDeposited = deposits.reduce((s, d) => s + d.amount, 0);
+  const totalWithdrawn = withdrawals.reduce((s, w) => s + w.amount, 0);
+  const netFlow = totalDeposited - totalWithdrawn;
+  const depositTimes = deposits.map((d) => d.time).sort((a, b) => a - b);
+  const withdrawTimes = withdrawals.map((w) => w.time).sort((a, b) => a - b);
+
+  const lossConsumptionRate =
+    netPnl < 0 && totalDeposited > 0
+      ? Math.abs(netPnl) / totalDeposited
+      : 0;
+
+  return {
+    depositCount: deposits.length,
+    withdrawCount: withdrawals.length,
+    totalDeposited,
+    totalWithdrawn,
+    netFlow,
+    avgDeposit: deposits.length > 0 ? totalDeposited / deposits.length : 0,
+    avgWithdraw: withdrawals.length > 0 ? totalWithdrawn / withdrawals.length : 0,
+    maxDeposit: deposits.length > 0 ? Math.max(...deposits.map((d) => d.amount)) : 0,
+    maxWithdraw: withdrawals.length > 0 ? Math.max(...withdrawals.map((w) => w.amount)) : 0,
+    cashoutRatio: totalDeposited > 0 ? totalWithdrawn / totalDeposited : 0,
+    firstDepositTime: depositTimes[0] ?? 0,
+    lastDepositTime: depositTimes[depositTimes.length - 1] ?? 0,
+    firstWithdrawTime: withdrawTimes[0] ?? 0,
+    lastWithdrawTime: withdrawTimes[withdrawTimes.length - 1] ?? 0,
+    lossConsumptionRate,
   };
 }
 
@@ -405,7 +469,10 @@ router.post("/analyze", async (req, res) => {
   const results = await Promise.all(
     wallets.map(async (wallet) => {
       try {
-        const rawFills = await fetchUserFills(wallet);
+        const [rawFills, rawTransfers] = await Promise.all([
+          fetchUserFills(wallet),
+          fetchUserTransfers(wallet).catch(() => [] as RawTransferEntry[]),
+        ]);
         const cleanedFills = cleanAndMergeFills(rawFills, mergeWindowMs);
         const rawLen = rawFills.length;
         const cleanLen = cleanedFills.length;
@@ -413,6 +480,7 @@ router.post("/analyze", async (req, res) => {
 
         const globalStats = computeGlobalStats(cleanedFills);
         const windowStats = windows.map(days => analyzeWindow(cleanedFills, days, feeRate));
+        const transferStats = analyzeTransfers(rawTransfers, globalStats.netPnl);
 
         return {
           wallet,
@@ -421,6 +489,7 @@ router.post("/analyze", async (req, res) => {
           waterRatio,
           globalStats,
           windowStats,
+          transferStats,
         };
       } catch (err) {
         req.log.error({ wallet, err }, "Failed to analyze wallet");

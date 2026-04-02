@@ -88,7 +88,7 @@ export interface WindowStats {
   recoveryFactor?: number;
   expectValue?: number;
   concentrationRatio?: number;
-  top3Coins?: CoinStat[];
+  top5Coins?: CoinStat[];
   reverseNetPnl?: number;
   reverseWinRate?: number;
   reverseAvgWin?: number;
@@ -106,6 +106,24 @@ export interface WindowStats {
   avgPosition?: number;
 }
 
+export interface TransferStats {
+  depositCount: number;
+  withdrawCount: number;
+  totalDeposited: number;
+  totalWithdrawn: number;
+  netFlow: number;
+  avgDeposit?: number;
+  avgWithdraw?: number;
+  maxDeposit?: number;
+  maxWithdraw?: number;
+  cashoutRatio?: number;
+  firstDepositTime?: number;
+  lastDepositTime?: number;
+  firstWithdrawTime?: number;
+  lastWithdrawTime?: number;
+  lossConsumptionRate?: number;
+}
+
 export interface WalletResult {
   wallet: string;
   error?: string;
@@ -114,6 +132,7 @@ export interface WalletResult {
   waterRatio?: number;
   globalStats?: GlobalStats;
   windowStats?: WindowStats[];
+  transferStats?: TransferStats;
 }
 
 export interface AnalyzeResponse {
